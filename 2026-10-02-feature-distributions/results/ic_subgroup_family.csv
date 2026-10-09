@@ -1,0 +1,5 @@
+family,n_feats,frac_overlap_lt50_ic_long,n_subjects_ic_long,frac_overlap_lt50_ic_short,n_subjects_ic_short
+ling,99,0.818,71,0.03,85
+temporal,24,0.458,71,0.333,85
+acoustic,420,0.288,69,0.169,17
+semantic,4,0.5,71,0.0,85

@@ -1,0 +1,5 @@
+family,auc,mean_abs_d,mean_ks,mean_overlap,frac_overlap_lt50,mean_abs_dR,n_feats,n_ic_auc,n_np_auc
+acoustic,1.0,1.102,0.477,0.688,0.279,0.22,420,86,1120
+temporal,1.0,1.498,0.585,0.537,0.458,0.285,24,155,1111
+ling,0.998,1.704,0.427,0.563,0.394,0.361,99,156,1119
+semantic,0.931,0.78,0.422,0.734,0.0,0.35,4,156,1117
