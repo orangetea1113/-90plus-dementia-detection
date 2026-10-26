@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cross-Cohort Feature Transfer</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --callout: #eef3fb;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --callout: #1d2430;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --callout: #1d2430;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 16px/1.62 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+a { color: var(--s1); }
+.wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+
+header.top { padding: 44px 0 20px; }
+.eyebrow { color: var(--ink2); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 10px; }
+h1 { font-size: clamp(28px, 4.4vw, 40px); line-height: 1.16; margin: 0 0 12px; letter-spacing: -.01em; }
+.subtitle { color: var(--ink2); font-size: 18px; margin: 0 0 14px; max-width: 740px; }
+.meta { color: var(--ink2); font-size: 14px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+button.theme {
+  font: inherit; font-size: 13px; color: var(--ink2); background: transparent; cursor: pointer;
+  border: 1px solid var(--axis); border-radius: 999px; padding: 3px 12px;
+}
+button.theme:hover { background: var(--grid); }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 20; background: var(--page);
+  border-bottom: 1px solid var(--grid); overflow-x: auto; white-space: nowrap;
+}
+nav.toc .wrap { display: flex; gap: 4px; }
+nav.toc a {
+  color: var(--ink2); text-decoration: none; font-size: 14px; padding: 12px 10px;
+  border-bottom: 2px solid transparent;
+}
+nav.toc a:hover { color: var(--ink); }
+nav.toc a.on { color: var(--ink); border-bottom-color: var(--s1); }
+
+section { padding: 44px 0 8px; }
+section + section { border-top: 1px solid var(--grid); margin-top: 36px; }
+h2 { font-size: 26px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.005em; }
+h2 .num { color: var(--muted); font-weight: 400; margin-right: 8px; }
+h3 { font-size: 18px; margin: 30px 0 6px; }
+p { margin: 10px 0; }
+.lead { font-size: 18px; color: var(--ink); max-width: 760px; }
+ul { padding-left: 22px; } li { margin: 6px 0; }
+.small { font-size: 14px; color: var(--ink2); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 24px 0; }
+.stat { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px 18px; }
+.stat .v { font-size: 44px; line-height: 1.05; font-weight: 650; letter-spacing: -.02em; }
+.stat .l { margin-top: 6px; font-size: 15px; font-weight: 600; }
+.stat .d { margin-top: 4px; font-size: 13.5px; color: var(--ink2); }
+
+.callout { background: var(--callout); border-radius: 12px; padding: 14px 18px; margin: 20px 0; border-left: 4px solid var(--s1); }
+.callout p:first-child { margin-top: 0; } .callout p:last-child { margin-bottom: 0; }
+.callout.warn { border-left-color: var(--s2); }
+
+figure.card {
+  margin: 22px 0; background: var(--surface); border: 1px solid var(--ring);
+  border-radius: 12px; padding: 16px 16px 12px;
+}
+figure.card figcaption { font-size: 14px; color: var(--ink2); margin-top: 8px; }
+.card h4 { margin: 0 0 2px; font-size: 15px; }
+.card .sub { margin: 0 0 8px; font-size: 13.5px; color: var(--ink2); }
+.chart { position: relative; width: 100%; }
+.chart.scroll { overflow-x: auto; }
+.chart svg { display: block; overflow: visible; }
+.chart svg text { font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--ink2); }
+.chart svg text.strong { fill: var(--ink); font-weight: 600; }
+.chart svg text.mut { fill: var(--muted); }
+.chart svg text.feat { fill: var(--ink); font-size: 11.5px; }
+.chart svg .grid { stroke: var(--grid); stroke-width: 1; }
+.chart svg .axis { stroke: var(--axis); stroke-width: 1; }
+.chart svg .hit { fill: transparent; }
+.chart svg [data-tip] { cursor: default; outline: none; }
+.chart svg [data-tip]:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink2); margin: 4px 0 10px; }
+.legend span.k { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; }
+.legend i.line { width: 18px; height: 0; border-top: 2px solid; }
+.legend i.box { width: 12px; height: 12px; border-radius: 3px; }
+.legend i.dot { width: 10px; height: 10px; border-radius: 50%; }
+
+.toggle { display: inline-flex; border: 1px solid var(--axis); border-radius: 8px; overflow: hidden; margin: 0 0 8px; }
+.toggle button { font: inherit; font-size: 13px; padding: 4px 12px; background: transparent; color: var(--ink2); border: 0; cursor: pointer; }
+.toggle button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+
+details { margin: 14px 0; }
+details > summary { cursor: pointer; color: var(--ink2); font-size: 14px; }
+details.tech { border: 1px solid var(--grid); border-radius: 10px; padding: 8px 14px; background: var(--surface); }
+details.tech > summary { font-weight: 600; color: var(--ink); }
+details.table-view { margin-top: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 8px 0; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--ink2); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+dl.gloss dt { font-weight: 600; margin-top: 14px; }
+dl.gloss dd { margin: 2px 0 0; color: var(--ink2); }
+
+.flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; margin: 20px 0; }
+.flow .box { flex: 1 1 170px; background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 12px 14px; font-size: 14.5px; }
+.flow .box b { display: block; margin-bottom: 2px; }
+.flow .arrow { align-self: center; color: var(--muted); font-size: 22px; }
+@media (max-width: 640px) { .flow .arrow { display: none; } }
+
+#tip {
+  position: fixed; z-index: 50; pointer-events: none; max-width: 340px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--axis);
+  border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0,0,0,.14); opacity: 0; transition: opacity .08s;
+}
+#tip.on { opacity: 1; }
+#tip .t { font-weight: 600; margin-bottom: 4px; overflow-wrap: anywhere; }
+#tip .r { display: flex; gap: 8px; align-items: baseline; }
+#tip .r .key { width: 14px; height: 0; border-top: 2px solid; flex: none; align-self: center; }
+#tip .r .val { font-weight: 650; font-variant-numeric: tabular-nums; }
+#tip .r .lab { color: var(--ink2); }
+#tip .note { color: var(--ink2); margin-top: 4px; }
+footer { padding: 40px 0 60px; color: var(--ink2); font-size: 13.5px; border-top: 1px solid var(--grid); margin-top: 48px; }
+@media print { nav.toc, button.theme, .toggle { display: none; } section { break-inside: avoid-page; } details { display: block; } }
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <p class="eyebrow">Cross-cohort speech analysis · MCI</p>
+  <h1>Does matching feature distributions help speech-based models transfer between cohorts?</h1>
+  <p class="subtitle">A model trained on conversations from the 90+ cohort, tested on I-CONECT: which speech features carry over, and which ones get in the way.</p>
+  <div class="meta"><span>Report date 2026-10-25</span><span>Aggregate results only, no participant-level data</span>
+    <button class="theme" id="themeBtn" type="button">Toggle dark / light</button></div>
+</div></header>
+
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#summary">At a glance</a><a href="#why">Why</a><a href="#data">Data</a>
+  <a href="#distributions">Distributions</a><a href="#method">Method</a><a href="#results">Results</a>
+  <a href="#weights">Feature weights</a><a href="#meaning">Meaning</a><a href="#next">Next steps</a>
+  <a href="#ask">What would help</a><a href="#appendix">Glossary</a>
+</div></nav>
+
+<main class="wrap">
+
+<!-- 0 ───────────────────────────────────────────── -->
+<section id="summary">
+  <h2>At a glance</h2>
+  <p class="lead">Small studies often want to reuse a model trained on a larger one. We asked whether
+  that works better if we keep only the speech features that look alike in both cohorts. It mostly does
+  not. What matters is whether a feature points the same way in both cohorts, and a similar-looking
+  distribution says nothing about that.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="v">0.63</div><div class="l">Best transfer accuracy (AUC)</div>
+      <div class="d">90+ model tested on I-CONECT, 95% CI 0.54–0.71. With all features: 0.56–0.60. Chance is 0.50.</div></div>
+    <div class="stat"><div class="v">p = 0.08</div><div class="l">Best filter vs. using all features</div>
+      <div class="d">No similarity threshold was significantly better than keeping every feature (paired bootstrap, the seven thresholds up to 0.95).</div></div>
+    <div class="stat"><div class="v">0.48–0.52</div><div class="l">I-CONECT model on its own data</div>
+      <div class="d">Trained and tested within I-CONECT (156 people): no better than chance.</div></div>
+  </div>
+
+  <h3>Three findings</h3>
+  <ol>
+    <li><b>Similar-looking features are not better features.</b> Keeping only the closest-matching
+      features did not reliably improve transfer, and the strictest filters made it worse.</li>
+    <li><b>A light clean-up helps a little.</b> Dropping the 17 worst-shifted features (mostly
+      recording-condition acoustic measures) raised one model's accuracy by up to 0.03, more than random
+      feature sets of the same size, though not significantly more than using all features.</li>
+    <li><b>What transfers is fluency and timing; what hurts is features that flip meaning.</b> Shorter
+      sentences, more pausing and turn-taking delay point the same way in both cohorts. The features
+      that hurt are mostly acoustic measures whose link to MCI reverses between cohorts, which no
+      distribution-similarity score can detect.</li>
+  </ol>
+  <div class="callout"><p><b>Practical takeaway.</b> Remove only the few features that are clearly shifted
+  between cohorts, and do not use distribution similarity as a selection rule beyond that. Better
+  transfer will more likely come from harmonizing recordings and checking that labels and pipelines
+  match than from choosing features.</p></div>
+</section>
+
+<!-- 1 ───────────────────────────────────────────── -->
+<section id="why">
+  <h2><span class="num">1</span>Why this question</h2>
+  <p class="lead">Speech carries early signs of cognitive decline, but labelled recordings are scarce.
+  Reusing a model trained on a large cohort would save a small study from starting over.</p>
+  <p>In this project we extract features from conversations: <em>what</em> people say (vocabulary,
+  sentence structure), <em>when</em> they say it (pauses, turn-taking), and <em>how</em> they sound
+  (pitch, voice quality). A model trained on the 90+ cohort (868 labelled participants) could help
+  I-CONECT (156 participants) if its learned patterns carry over.</p>
+  <p>They may not, because the two cohorts differ in many ways: the kind of conversation, the speech
+  recognition system, the recording setup and the age range. A feature that behaves one way in one cohort
+  can behave differently in the other.</p>
+  <div class="flow" role="img" aria-label="Experiment flow">
+    <div class="box"><b>1 · Train</b>Fit a model on the 90+ cohort, using a chosen set of speech features.</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>2 · Filter (the idea we tested)</b>Keep only features whose distributions look alike in both cohorts.</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>3 · Test</b>Apply the model, unchanged, to I-CONECT and measure how well it separates MCI from normal (AUC).</div>
+  </div>
+  <div class="callout"><p><b>Hypothesis.</b> Features that look alike across cohorts should transfer better. We
+  tested it by sweeping how strict the similarity filter is, from “keep everything” to “keep only
+  near-identical features”.</p></div>
+</section>
+
+<!-- 2 ───────────────────────────────────────────── -->
+<section id="data">
+  <h2><span class="num">2</span>The two datasets</h2>
+  <p class="lead">Two cohorts of older adults, each with a conversation recording per participant and a
+  label of MCI or normal. The same 547 speech features are available in both.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>90+ cohort</th><th>I-CONECT</th></tr></thead>
+    <tbody>
+      <tr><td>Participants in the experiment</td><td>868 (456 MCI)</td><td>156 (82 MCI)</td></tr>
+      <tr><td>Age</td><td>All 90 or older</td><td>Roughly 75–90</td></tr>
+      <tr><td>Conversation</td><td>Structured cognitive-assessment questions; median 3 min</td>
+        <td>Semi-structured video chat; two groups: 71 long (median 25 min) and 85 short (median 7.5 min)</td></tr>
+      <tr><td>Speech recognition</td><td>Whisper large-v3 with speaker separation</td><td>DeepSpeech2-based</td></tr>
+      <tr><td>Acoustic features available</td><td>All usable recordings</td><td>86 of 156 participants</td></tr>
+    </tbody></table></div>
+  <p class="small">The feature-distribution comparison in section 3 uses all 1,120 usable 90+ transcripts,
+  not only the 868 with an MCI/normal label.</p>
+
+  <h3>The 547 features</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Family</th><th class="n">Features</th><th>What it captures</th></tr></thead>
+    <tbody>
+      <tr><td>Linguistic</td><td class="n">99</td><td>Word categories, sentence structure, vocabulary diversity, response length</td></tr>
+      <tr><td>Temporal</td><td class="n">24</td><td>Pausing, speech rate and turn-taking between participant and interviewer</td></tr>
+      <tr><td>Semantic</td><td class="n">4</td><td>Content density, diversity and word frequency</td></tr>
+      <tr><td>Acoustic</td><td class="n">420</td><td>Pitch, loudness, voice quality and spectral (MFCC) summaries</td></tr>
+    </tbody></table></div>
+  <div class="callout warn"><p><b>Read the differences with care.</b> The cohorts differ in conversation type,
+  speech recognition, recording setup and population at the same time. This report describes how the
+  features differ. It does not say which of these causes is responsible.</p></div>
+</section>
+
+<!-- 3 ───────────────────────────────────────────── -->
+<section id="distributions">
+  <h2><span class="num">3</span>How different are the two cohorts?</h2>
+  <p class="lead">Taken at face value, half of the features differ strongly between the cohorts. Once each
+  cohort is rescaled on its own, about two thirds have the same shape.</p>
+
+  <figure class="card">
+    <h4>On the raw scale, half of the features differ a lot</h4>
+    <p class="sub">Number of features by size of the difference between cohort averages (Cohen’s d).</p>
+    <div class="chart" id="c-tiers"></div><div class="tbl" id="t-tiers"></div>
+    <figcaption>Cohen’s d is the gap between the two cohort averages in units of spread. Above 0.8 is a
+    large difference. The very largest are acoustic measures of moment-to-moment variation.</figcaption>
+  </figure>
+
+  <p>Much of that gap is location and scale, not shape. We rescale each cohort using its own median and
+  spread, then ask how closely the two distributions match, using a score called <b>Q-Q CCC</b> (1 = identical
+  shape). This score is what we later use to filter features.</p>
+
+  <figure class="card">
+    <h4>After rescaling each cohort, most acoustic and timing features match</h4>
+    <p class="sub">Features by how closely the two cohorts’ distributions match (Q-Q CCC).</p>
+    <div class="legend">
+      <span class="k"><i class="box" style="background:var(--s1)"></i>Same shape (CCC ≥ 0.95)</span>
+      <span class="k"><i class="box" style="background:color-mix(in srgb, var(--s1) 38%, var(--surface))"></i>Moderate (0.90–0.95)</span>
+      <span class="k"><i class="box" style="background:var(--s2)"></i>Different (&lt; 0.90)</span></div>
+    <div class="chart" id="c-ccc"></div><div class="tbl" id="t-ccc"></div>
+    <figcaption>Linguistic features keep a different shape: I-CONECT’s long conversations inflate word and
+    clause counts, and rescaling cannot undo that. One timing feature is constant in I-CONECT and has no
+    score (see section 9).</figcaption>
+  </figure>
+
+  <details class="tech"><summary>Technical detail</summary>
+    <p>Q-Q CCC is Lin’s concordance correlation between the 5th–95th percentiles of the two cohorts’
+    robust-z-scored distributions (z = (x − median) / IQR, computed within each cohort). Median KS
+    statistic falls from 0.44 on the raw scale to 0.09 after rescaling for all features, but only from
+    0.45 to 0.40 for linguistic features. I-CONECT’s durations are bimodal: count-like linguistic
+    features shift only in the long group, while ratio measures such as MTLD barely shift. Rhythm features
+    (pause ratio, turns per minute) differ in both groups, independent of length.</p></details>
+</section>
+
+<!-- 4 ───────────────────────────────────────────── -->
+<section id="method">
+  <h2><span class="num">4</span>How we tested it</h2>
+  <p class="lead">We trained on 90+ using only features above a chosen similarity score, tested on
+  I-CONECT, and compared against several baselines that show how much of any gain is real.</p>
+  <ul>
+    <li><b>Similarity threshold.</b> 12 settings from “all 547 features” to “only the 36 features with CCC ≥ 0.995”.</li>
+    <li><b>Two models.</b> A boosted-tree model (SGBT) and a regularized logistic regression (Elastic Net),
+      so the result does not depend on one model type.</li>
+    <li><b>Accuracy measure.</b> AUC: the chance that the model scores a random MCI participant higher than a
+      random normal one. 0.5 is a coin flip, 1.0 is perfect.</li>
+  </ul>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Check</th><th>Question it answers</th></tr></thead>
+    <tbody>
+      <tr><td>Within-cohort cross-validation</td><td>How well can each cohort predict its own labels? (the ceiling for transfer)</td></tr>
+      <tr><td>Reverse transfer (I-CONECT → 90+)</td><td>Does the pattern hold in the other direction?</td></tr>
+      <tr><td>Random feature subsets of equal size</td><td>Is a similarity-selected set better than a random set of the same size?</td></tr>
+      <tr><td>Label permutation</td><td>Is transfer better than chance at all?</td></tr>
+      <tr><td>Paired bootstrap vs. all features</td><td>Is any filter better than doing nothing?</td></tr>
+    </tbody></table></div>
+  <details class="tech"><summary>Technical detail</summary>
+    <p>Subject-level mean features; each cohort robust-z-scored with its own median and IQR; transfer =
+    single fit on all of one cohort, 95% bootstrap CI on the target. Within-cohort CV is
+    StratifiedGroupKFold(5) × 10 seeds with normalization fit on the training fold. Random-subset control:
+    200 draws per threshold, both family-stratified and unstratified. Permutation test: 5,000 label
+    permutations. Paired bootstrap: 2,000 resamples of the same I-CONECT participants across all subsets.</p></details>
+</section>
+
+<!-- 5 ───────────────────────────────────────────── -->
+<section id="results">
+  <h2><span class="num">5</span>Does filtering by similarity help?</h2>
+  <p class="lead">A little at moderate settings, not at strict ones, and not reliably compared with using
+  every feature.</p>
+
+  <figure class="card">
+    <h4>Transfer accuracy as the similarity filter gets stricter</h4>
+    <p class="sub">AUC on I-CONECT (orange, shaded = 95% CI) against how well each cohort predicts its own labels.</p>
+    <div class="legend">
+      <span class="k"><i class="line" style="border-color:var(--s2)"></i>● 90+ → I-CONECT (transfer)</span>
+      <span class="k"><i class="line" style="border-color:var(--s1)"></i>■ 90+ within-cohort</span>
+      <span class="k"><i class="line" style="border-color:var(--s3)"></i>◆ I-CONECT within-cohort</span></div>
+    <div class="chart" id="c-auc-sgbt"></div>
+    <div class="chart" id="c-auc-elasticnet"></div>
+    <div class="tbl" id="t-auc"></div>
+    <figcaption>Hover for values. Every transfer interval is about ±0.09 wide, so most differences between
+    thresholds are within noise.</figcaption>
+  </figure>
+
+  <ul>
+    <li><b>Boosted trees (SGBT)</b> gain up to +0.033 at moderate thresholds (CCC ≥ 0.50–0.85), then fall back to the
+      baseline.</li>
+    <li><b>Elastic Net</b> drifts up to 0.63 at ≥ 0.98, but the curve is erratic, not a clean trend.</li>
+    <li><b>Accuracy within 90+ falls steadily</b> as features are removed. Every filter step costs accuracy on the cohort the model learned from.</li>
+    <li><b>The I-CONECT model, trained and tested on its own data, is at chance.</b> Transfer from 90+ is
+      better than this, so borrowing from the larger cohort does help. The question is only which features
+      to use.</li>
+  </ul>
+
+  <h3>Is the gain more than luck?</h3>
+  <figure class="card">
+    <h4>Similarity-selected features vs. random features of the same size</h4>
+    <p class="sub">Orange dot: the selected set. Grey bar: range of 200 random sets with the same size (95%); tick: their mean.</p>
+    <div class="legend">
+      <span class="k"><i class="dot" style="background:var(--s2)"></i>Similarity-selected set</span>
+      <span class="k"><i class="box" style="background:var(--muted);opacity:.4;width:8px"></i>95% range of 200 random sets</span>
+      <span class="k"><i class="line" style="border-color:var(--ink2);width:14px"></i>Their mean</span></div>
+    <div class="toggle" role="group" aria-label="Random subset mode">
+      <button type="button" data-mode="stratified" aria-pressed="true">Same family mix</button>
+      <button type="button" data-mode="unstratified" aria-pressed="false">Any features</button></div>
+    <div class="chart" id="c-rand-sgbt"></div>
+    <div class="chart" id="c-rand-elasticnet"></div>
+    <div class="tbl" id="t-rand"></div>
+    <figcaption>For SGBT the selected set beats random sets at CCC 0.50–0.85 (p ≈ 0.005–0.035). For Elastic
+    Net it never does. From CCC 0.90 up the advantage disappears for both.</figcaption>
+  </figure>
+  <div class="callout"><p><b>Where the SGBT gain comes from.</b> The 0.50 cut removes only 17 features: 16
+  delta-MFCC means (acoustic measures that mostly track recording conditions) and one interaction feature.
+  That alone gives more than half of the gain (+0.019 of +0.033). The benefit comes from
+  <em>removing a few badly shifted features</em>, not from <em>keeping only highly similar ones</em>.</p></div>
+  <p>Compared directly with using all features, no threshold is significantly better (tested on the seven thresholds up to 0.95; largest: SGBT at
+  CCC ≥ 0.70, ΔAUC +0.033, 95% CI −0.004 to +0.071, p = 0.08). Strict thresholds (≥ 0.99) hurt both source
+  accuracy and transfer: <b>distribution similarity is not the same as diagnostic information</b>.</p>
+</section>
+
+<!-- 6 ───────────────────────────────────────────── -->
+<section id="weights">
+  <h2><span class="num">6</span>What do the models rely on?</h2>
+  <p class="lead">To see why, we compared the weight each model gives to each feature, for a model trained on
+  90+ and one trained on I-CONECT.</p>
+
+  <div class="callout warn"><p><b>Start with this caveat.</b> The model trained on I-CONECT has no real signal
+  to weight: its accuracy on held-out I-CONECT participants is 0.48–0.52. Its weights are mostly noise, so a
+  difference between the two models mainly means that I-CONECT’s model has not recovered the 90+ pattern, not
+  that I-CONECT has its own distinct markers. Even a 156-person sample of 90+ reaches 0.60, so small sample
+  size alone does not explain it.</p></div>
+
+  <figure class="card">
+    <h4>Elastic Net weights: 90+ model vs. I-CONECT model</h4>
+    <p class="sub">Each model’s top 10 features, ordered by the 90+ weight. Hover for details.</p>
+    <div class="legend">
+      <span class="k"><i class="box" style="background:var(--s2)"></i>Higher in MCI</span>
+      <span class="k"><i class="box" style="background:var(--s1)"></i>Lower in MCI</span>
+      <span class="k"><i class="box" style="background:var(--s1);opacity:.3"></i>Faded: chosen in fewer than half of 50 resamples</span></div>
+    <div class="chart scroll" id="c-en"></div><div class="tbl" id="t-en"></div>
+    <figcaption>Coefficients are per standard deviation, averaged over 50 bootstrap fits. The 90+ model keeps
+    146 features in at least half of its resamples, the I-CONECT model only 13.</figcaption>
+  </figure>
+
+  <ul>
+    <li><b>Two timing features agree in both cohorts:</b> more interviewer turns and a longer median response
+      delay point towards MCI in both.</li>
+    <li><b>Several MFCC acoustic features flip sign.</b> <span class="small">For example
+      <code>mfcc_8_mean_std</code> is negative on 90+ and the largest positive weight on I-CONECT.</span></li>
+    <li><b>The 90+ model’s strongest feature cannot be used on I-CONECT.</b> <code>ix_interruption_rate</code>
+      (how often speakers overlap) is exactly 0 for every I-CONECT participant, most likely because the turn
+      timestamps never overlap, so it cannot carry any signal there (see section 9).</li>
+  </ul>
+
+  <details class="tech"><summary>SGBT weights (permutation importance)</summary>
+    <p class="sub">Drop in AUC when a feature is shuffled on held-out participants; mean ± SD over 50 resamples.</p>
+    <div class="chart scroll" id="c-sg"></div><div class="tbl" id="t-sg"></div>
+    <p class="small">On I-CONECT every importance has a spread larger than its mean, so the ranking is not reliable.</p></details>
+
+  <h3>The shared signal, and what hurts transfer</h3>
+  <p>A model-free view helps: for each feature, does it point the same direction (higher or lower in MCI) in
+  both cohorts? Among features with a clear effect on 90+, direction agreement rises with effect size, and
+  it is perfect for the strongest ones.</p>
+
+  <figure class="card">
+    <h4>Direction agreement between cohorts</h4>
+    <p class="sub">Share of features that point the same way in I-CONECT as in 90+.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+      <div><div class="small" style="margin-bottom:2px"><b>By size of the 90+ effect</b> (|AUC − 0.5|)</div><div class="chart" id="c-dir-cut"></div></div>
+      <div><div class="small" style="margin-bottom:2px"><b>By feature family</b> (clear 90+ effect, ≥ 0.05)</div><div class="chart" id="c-dir-fam"></div></div></div>
+    <div class="tbl" id="t-dir"></div>
+    <figcaption>The shared signal is fluency and timing: shorter sentences and utterances, more pausing,
+    longer response delays. It is weaker in I-CONECT but points the same way. Acoustic features agree
+    least (72%).</figcaption>
+  </figure>
+
+  <figure class="card">
+    <h4>Features whose direction flips hurt transfer</h4>
+    <p class="sub">Average effect on I-CONECT accuracy of shuffling a feature, among the 90+ model’s top 100 features (negative = the feature misleads).</p>
+    <div class="legend">
+      <span class="k"><i class="box" style="background:var(--s2)"></i>Direction flips in I-CONECT</span>
+      <span class="k"><i class="box" style="background:var(--s1)"></i>Same direction</span></div>
+    <div class="chart" id="c-flip"></div><div class="tbl" id="t-flip"></div>
+    <figcaption>For Elastic Net the difference is clear (p = 0.0001). For SGBT it points the same way but is not
+    significant (p = 0.42).</figcaption>
+  </figure>
+
+  <p>The worst case is <code>mfcc_d5_mean_mean</code>: univariate AUC 0.553 on 90+ but 0.391 on I-CONECT. Its
+  similarity score is a respectable 0.66, so a similarity filter at CCC ≥ 0.50 keeps it. Across all features,
+  transfer harm is uncorrelated with the similarity score (ρ = 0.04 for SGBT, −0.05 for Elastic Net), and none of
+  the 20 most harmful features falls below 0.50. A few features that a similarity filter drops are
+  actually <em>helpful</em> to the linear model, possibly because they offset recording differences.</p>
+
+  <figure class="card">
+    <h4>Do the two models agree about which features matter?</h4>
+    <p class="sub">Rank correlation with the full 90+ model. A 156-person sample of 90+ (grey, 10 draws) shows what to expect from small n alone.</p>
+    <div class="legend">
+      <span class="k"><i class="dot" style="background:var(--muted)"></i>90+ subsample of 156 people</span>
+      <span class="k"><i class="dot" style="background:var(--s2)"></i>I-CONECT model</span></div>
+    <div class="chart" id="c-agree"></div><div class="tbl" id="t-agree"></div>
+    <figcaption>For Elastic Net coefficients, I-CONECT’s model agrees with 90+ far less than any 156-person 90+ sample
+    does (0.10 vs. 0.36–0.47). Permutation importance is too noisy at n = 156 to separate the two.</figcaption>
+  </figure>
+</section>
+
+<!-- 7 ───────────────────────────────────────────── -->
+<section id="meaning">
+  <h2><span class="num">7</span>What this means</h2>
+  <ul>
+    <li><b>Do not select features by distribution similarity.</b> It captures whether the numbers look alike, not
+      whether a feature relates to MCI in the same way in both cohorts.</li>
+    <li><b>A light cleaning step is reasonable.</b> Exclude the few features with very low similarity (CCC &lt; 0.5).
+      The gain is small and not proven against using everything.</li>
+    <li><b>The shared signal is behavioural.</b> Fluency, pausing and turn-taking carry across cohorts. Many
+      acoustic features do not, and they are the likeliest to mislead a transferred model.</li>
+    <li><b>A larger cohort helps a smaller one, even imperfectly.</b> A 156-person study alone could not learn the
+      signal, while the 90+ model reaches about 0.6 on it.</li>
+  </ul>
+</section>
+
+<!-- 8 ───────────────────────────────────────────── -->
+<section id="next">
+  <h2><span class="num">8</span>Limits and next steps</h2>
+  <h3>Limits</h3>
+  <ul>
+    <li>One I-CONECT sample of 156. Every transfer interval is about ±0.09 wide, and the random-subset control varies the features, not the people.</li>
+    <li>Many comparisons (12 thresholds × 2 models × several tests); thresholds were not pre-registered and p-values are not corrected.</li>
+    <li>Similarity scores were computed on the same two cohorts used for evaluation (labels were not used).</li>
+    <li>Training sizes differ (868 vs. 156), which confounds comparisons between directions.</li>
+    <li>Individual feature weights are noisy (changes of about ±0.01–0.02 AUC with no interval). Read family-level patterns, not single ranks. Choosing features by direction flips would use I-CONECT labels and leak them.</li>
+  </ul>
+  <h3>Next steps</h3>
+  <ul>
+    <li>Transfer using timing and linguistic features only: a rule that needs no target labels.</li>
+    <li>Test the “drop CCC &lt; 0.5” cleaning rule on another cohort pair, or after matching the speech recognition.</li>
+    <li>Combine with harmonization or domain adaptation instead of selecting features alone.</li>
+    <li>Add confidence intervals to per-feature transfer effects.</li>
+  </ul>
+</section>
+
+<!-- 9 ───────────────────────────────────────────── -->
+<section id="ask">
+  <h2><span class="num">9</span>What would help from you</h2>
+  <p class="lead">The data-specific questions below would help us tell real cohort differences from differences
+  in how the data were produced. Any one answer is useful.</p>
+  <ol>
+    <li><b>How was MCI determined?</b> The instrument, cut-offs, and timing relative to the recording, in each
+      cohort, so we can check whether the labels are comparable.</li>
+    <li><b>Can overlapping speech be recovered in I-CONECT?</b> The interruption rate is exactly 0 for every
+      participant, which suggests the turn timestamps cannot represent overlap. This is the 90+ model’s single
+      strongest feature, and it is unusable on I-CONECT as things stand.</li>
+    <li><b>What determines conversation length?</b> I-CONECT sessions fall into two groups (about 7 and 25
+      minutes), and many linguistic features differ only in the long group. Knowing the protocol would tell us whether
+      to analyse them separately.</li>
+    <li><b>Can the missing audio be located?</b> Acoustic features exist for 86 of 156 participants. More
+      audio, or re-transcription with the same speech recognition system used for 90+, would remove one source of
+      difference.</li>
+    <li><b>Is a second sample available?</b> A fresh set of participants would let us test the conclusions
+      without reusing the same 156 people.</li>
+  </ol>
+</section>
+
+<!-- appendix ───────────────────────────────────────────── -->
+<section id="appendix">
+  <h2>Glossary</h2>
+  <dl class="gloss">
+    <dt>MCI</dt><dd>Mild cognitive impairment: cognitive decline beyond normal ageing that does not yet meet the threshold for dementia.</dd>
+    <dt>AUC</dt><dd>Area under the ROC curve. The chance that the model scores a random MCI participant higher than a random normal one. 0.5 = chance, 1.0 = perfect.</dd>
+    <dt>Transfer</dt><dd>Training a model on one cohort and applying it, unchanged, to another.</dd>
+    <dt>Within-cohort cross-validation</dt><dd>Training and testing inside one cohort on different participants. It tells us how much signal is learnable there.</dd>
+    <dt>Cohen’s d</dt><dd>Difference between two averages divided by their spread. 0.2 small, 0.5 medium, 0.8 large.</dd>
+    <dt>Robust z-score</dt><dd>A feature minus its median, divided by its interquartile range, computed separately for each cohort. It removes differences in level and scale.</dd>
+    <dt>Q-Q CCC</dt><dd>A 0–1 score for how closely two distributions match after rescaling (1 = identical shape).</dd>
+    <dt>SGBT / Elastic Net</dt><dd>A gradient-boosted tree model, and a logistic regression that shrinks unhelpful weights towards zero.</dd>
+    <dt>Permutation importance</dt><dd>How much accuracy drops when one feature’s values are shuffled. A bigger drop means the model relies on it more.</dd>
+    <dt>MFCC</dt><dd>Mel-frequency cepstral coefficients: compact summaries of the sound spectrum, sensitive to microphone and recording conditions.</dd>
+    <dt>Bootstrap resample</dt><dd>Re-drawing participants with replacement to estimate how much a result would vary.</dd>
+  </dl>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  Generated 2026-10-25 from aggregate result files; charts and tables are built from the same data. No
+  participant-level data is included. Code and full methods are in the project repository.
+</div></footer>
+
+<div id="tip" role="tooltip"></div>
+
+<script>
+"use strict";
+const D = {"transfer":{"sgbt":[{"thr":null,"n":547,"cv90":0.6478511965593596,"cv90_sd":0.0094826079144146,"cvic":0.4746704021094265,"cvic_sd":0.0321150863760298,"tr":0.5954185893210283,"lo":0.5055201523780165,"hi":0.678495977076013,"rev":0.5651720320218021},{"thr":0.5,"n":530,"cv90":0.6452558124680634,"cv90_sd":0.0086513900212291,"cvic":0.4857448912326961,"cvic_sd":0.0336764739439695,"tr":0.6147000659195782,"lo":0.5281416009857466,"hi":0.6954975235551288,"rev":0.5506195707715891},{"thr":0.7,"n":524,"cv90":0.6454964018054847,"cv90_sd":0.0080584602901225,"cvic":0.4716875411997363,"cvic_sd":0.0306613564101712,"tr":0.6282135794330916,"lo":0.5373789609587696,"hi":0.7137982716031497,"rev":0.5574646567876},{"thr":0.8,"n":510,"cv90":0.6426497828308636,"cv90_sd":0.0095124146313895,"cvic":0.4648978246539222,"cvic_sd":0.0330283564964025,"tr":0.6196440342781807,"lo":0.5310929425159794,"hi":0.7017481358740679,"rev":0.5601473343553058},{"thr":0.85,"n":474,"cv90":0.6382340103900528,"cv90_sd":0.012095873129895,"cvic":0.4684739617666447,"cvic_sd":0.0358395120936901,"tr":0.6259063941990771,"lo":0.534801340712733,"hi":0.7065453303493281,"rev":0.5530574007835122},{"thr":0.9,"n":410,"cv90":0.6333807060126043,"cv90_sd":0.0116630677131529,"cvic":0.4869479235332893,"cvic_sd":0.0273991615992119,"tr":0.606130520764667,"lo":0.5113241693664037,"hi":0.6854199041699042,"rev":0.5622498296712656},{"thr":0.95,"n":347,"cv90":0.6344335505024699,"cv90_sd":0.011209232361538,"cvic":0.4694792353328938,"cvic_sd":0.0249284539671614,"tr":0.5641067897165458,"lo":0.4695729396556602,"hi":0.6472579022915026,"rev":0.5467924970192473},{"thr":0.96,"n":310,"cv90":0.6400272525975133,"cv90_sd":0.0096683120422969,"cvic":0.4748681608437706,"cvic_sd":0.0264307146092032,"tr":0.6058009228740935,"lo":0.5187182869735345,"hi":0.682374709752322,"rev":0.5703191534661898},{"thr":0.97,"n":279,"cv90":0.6262338187702265,"cv90_sd":0.0094054743954086,"cvic":0.4697429136453526,"cvic_sd":0.0312218288983908,"tr":0.5975609756097562,"lo":0.506270782680206,"hi":0.6775119538995934,"rev":0.5207428461931527},{"thr":0.98,"n":224,"cv90":0.6192221299608243,"cv90_sd":0.0145773907846537,"cvic":0.4973961766644693,"cvic_sd":0.0237466988602259,"tr":0.5936058009228741,"lo":0.4988982995572534,"hi":0.6731886907045135,"rev":0.5241334525634475},{"thr":0.99,"n":114,"cv90":0.6123648015670243,"cv90_sd":0.0103281566650468,"cvic":0.5359096901779827,"cvic_sd":0.0204813266932516,"tr":0.5575148319050759,"lo":0.4644078728795239,"hi":0.6407714403935288,"rev":0.4961835717935615},{"thr":0.995,"n":36,"cv90":0.5788989311871913,"cv90_sd":0.0101258654957588,"cvic":0.4814930784442979,"cvic_sd":0.0340121468143447,"tr":0.5329597890573501,"lo":0.4381134949609214,"hi":0.6172812587953843,"rev":0.5225845256344746}],"elasticnet":[{"thr":null,"n":547,"cv90":0.6655659172202351,"cv90_sd":0.008835825801901,"cvic":0.5130685563612392,"cvic_sd":0.0296177267839008,"tr":0.5644363876071193,"lo":0.4715612135538909,"hi":0.652717548493804,"rev":0.5710483733605859},{"thr":0.5,"n":530,"cv90":0.6498413813660365,"cv90_sd":0.007441263619244,"cvic":0.5194297956493077,"cvic_sd":0.028600138828517,"tr":0.5565260382333553,"lo":0.4630230842884425,"hi":0.6443585001202795,"rev":0.5704149633793221},{"thr":0.7,"n":524,"cv90":0.6492819579288026,"cv90_sd":0.0076879514753267,"cvic":0.5209294660514172,"cvic_sd":0.028805705414572,"tr":0.5820698747528016,"lo":0.4876179926681352,"hi":0.6679271345061956,"rev":0.5704256089252258},{"thr":0.8,"n":510,"cv90":0.648554334866292,"cv90_sd":0.0068652991823166,"cvic":0.5228740936058008,"cvic_sd":0.0348734038258042,"tr":0.5894858272907053,"lo":0.4962260979760614,"hi":0.6725973012997469,"rev":0.5704256089252256},{"thr":0.85,"n":474,"cv90":0.64533458950775,"cv90_sd":0.007073219084174,"cvic":0.5263513513513514,"cvic_sd":0.0352233179049843,"tr":0.5764667106130521,"lo":0.4809777888833361,"hi":0.6599329316114501,"rev":0.5699412365866121},{"thr":0.9,"n":410,"cv90":0.6402087591551695,"cv90_sd":0.0081942097375273,"cvic":0.5317567567567567,"cvic_sd":0.0344625330473341,"tr":0.5856954515491101,"lo":0.4904827844096325,"hi":0.6685916944214296,"rev":0.5686744166240845},{"thr":0.95,"n":347,"cv90":0.6356311744166241,"cv90_sd":0.0043144462039595,"cvic":0.5196934739617667,"cvic_sd":0.0335696098770657,"tr":0.5983849703361898,"lo":0.5029600334246831,"hi":0.6820813700213372,"rev":0.5720011497189577},{"thr":0.96,"n":310,"cv90":0.6396897887923694,"cv90_sd":0.0039106683470131,"cvic":0.5272577455504284,"cvic_sd":0.030855908177594,"tr":0.6076137112722478,"lo":0.5090616232763929,"hi":0.691486127309298,"rev":0.5794690001703288},{"thr":0.97,"n":279,"cv90":0.6386630258899676,"cv90_sd":0.0060622058487908,"cvic":0.4974950560316413,"cvic_sd":0.0267548232733054,"tr":0.6229400131839156,"lo":0.5272150814522609,"hi":0.697273484664027,"rev":0.5614035087719298},{"thr":0.98,"n":224,"cv90":0.6481694983818771,"cv90_sd":0.0083372499174108,"cvic":0.5176170072511536,"cvic_sd":0.0332096208825433,"tr":0.6295319709953856,"lo":0.54166094432115,"hi":0.7040770001609196,"rev":0.5682060126043263},{"thr":0.99,"n":114,"cv90":0.6340859734287174,"cv90_sd":0.0101540677297407,"cvic":0.4891644693473961,"cvic_sd":0.0360912935348103,"tr":0.569874752801582,"lo":0.4817584138557337,"hi":0.6603488337610189,"rev":0.548527721001533},{"thr":0.995,"n":36,"cv90":0.6235298501107137,"cv90_sd":0.0069039134448608,"cvic":0.4794495715227422,"cvic_sd":0.0286576599818246,"tr":0.5192814765985498,"lo":0.4272362764550265,"hi":0.6048968841346889,"rev":0.5607647760177142}]},"stats":{"random":[{"mode":"stratified","thr":0.5,"model":"elasticnet","n":530,"auc":0.5565260382333553,"mean":0.5644289716545814,"lo":0.5426293671720501,"hi":0.5924563282794989,"p":0.8507462686567164},{"mode":"stratified","thr":0.5,"model":"sgbt","n":530,"auc":0.6147000659195782,"mean":0.5717064930784442,"lo":0.5464279828609097,"hi":0.6051664469347395,"p":0.0099502487562189},{"mode":"stratified","thr":0.7,"model":"elasticnet","n":524,"auc":0.5820698747528016,"mean":0.5639609426499671,"lo":0.5446481542518127,"hi":0.5904828609096902,"p":0.0646766169154228},{"mode":"stratified","thr":0.7,"model":"sgbt","n":524,"auc":0.6282135794330916,"mean":0.5703864535266974,"lo":0.546094264996704,"hi":0.5949571522742254,"p":0.0049751243781094},{"mode":"stratified","thr":0.8,"model":"elasticnet","n":510,"auc":0.5894858272907053,"mean":0.5658899143045484,"lo":0.5386824324324325,"hi":0.5972313777191826,"p":0.0945273631840796},{"mode":"stratified","thr":0.8,"model":"sgbt","n":510,"auc":0.6196440342781807,"mean":0.5697338497033618,"lo":0.5398772247857613,"hi":0.6030240606460118,"p":0.0049751243781094},{"mode":"stratified","thr":0.85,"model":"elasticnet","n":474,"auc":0.5764667106130521,"mean":0.5670871786420567,"lo":0.5287244561634806,"hi":0.6033371786420567,"p":0.2985074626865671},{"mode":"stratified","thr":0.85,"model":"sgbt","n":474,"auc":0.6259063941990771,"mean":0.5801343111404087,"lo":0.5435151615029664,"hi":0.6266026697429137,"p":0.0348258706467661},{"mode":"stratified","thr":0.9,"model":"elasticnet","n":410,"auc":0.5856954515491101,"mean":0.5733454185893211,"lo":0.5275131839156231,"hi":0.615280982201714,"p":0.308457711442786},{"mode":"stratified","thr":0.9,"model":"sgbt","n":410,"auc":0.606130520764667,"mean":0.5888216875411998,"lo":0.552002307185234,"hi":0.6298698088332234,"p":0.2238805970149253},{"mode":"stratified","thr":0.95,"model":"elasticnet","n":347,"auc":0.5983849703361898,"mean":0.5789930784442979,"lo":0.5279787409360579,"hi":0.6265697099538562,"p":0.2437810945273631},{"mode":"stratified","thr":0.95,"model":"sgbt","n":347,"auc":0.5641067897165458,"mean":0.5862248681608437,"lo":0.5331451878707976,"hi":0.6309451219512195,"p":0.7960199004975125},{"mode":"unstratified","thr":0.5,"model":"elasticnet","n":530,"auc":0.5565260382333553,"mean":0.5659805537244561,"lo":0.548265491100857,"hi":0.5859055702043507,"p":0.9154228855721394},{"mode":"unstratified","thr":0.5,"model":"sgbt","n":530,"auc":0.6147000659195782,"mean":0.5698277851021752,"lo":0.544606954515491,"hi":0.5946728740936058,"p":0.0049751243781094},{"mode":"unstratified","thr":0.7,"model":"elasticnet","n":524,"auc":0.5820698747528016,"mean":0.5666348055372445,"lo":0.543651120632828,"hi":0.5918012524719841,"p":0.1144278606965174},{"mode":"unstratified","thr":0.7,"model":"sgbt","n":524,"auc":0.6282135794330916,"mean":0.5714642386288729,"lo":0.5424439683586024,"hi":0.6028592617007251,"p":0.0049751243781094},{"mode":"unstratified","thr":0.8,"model":"elasticnet","n":510,"auc":0.5894858272907053,"mean":0.5680314765985497,"lo":0.5403757415952538,"hi":0.598071852340145,"p":0.1094527363184079},{"mode":"unstratified","thr":0.8,"model":"sgbt","n":510,"auc":0.6196440342781807,"mean":0.5715688859591299,"lo":0.5367336849044165,"hi":0.6077949901120633,"p":0.0049751243781094},{"mode":"unstratified","thr":0.85,"model":"elasticnet","n":474,"auc":0.5764667106130521,"mean":0.5665861898483849,"lo":0.5278922214897824,"hi":0.6023401450230719,"p":0.2835820895522388},{"mode":"unstratified","thr":0.85,"model":"sgbt","n":474,"auc":0.6259063941990771,"mean":0.5736560646011866,"lo":0.5396753460777851,"hi":0.610938529993408,"p":0.0049751243781094},{"mode":"unstratified","thr":0.9,"model":"elasticnet","n":410,"auc":0.5856954515491101,"mean":0.566424686882004,"lo":0.5221530982201714,"hi":0.6076260711931444,"p":0.2039800995024875},{"mode":"unstratified","thr":0.9,"model":"sgbt","n":410,"auc":0.606130520764667,"mean":0.5783256427158866,"lo":0.5316331575477917,"hi":0.6142180290046143,"p":0.1044776119402985},{"mode":"unstratified","thr":0.95,"model":"elasticnet","n":347,"auc":0.5983849703361898,"mean":0.5701878707976269,"lo":0.5229935728411338,"hi":0.6176911667765325,"p":0.1741293532338308},{"mode":"unstratified","thr":0.95,"model":"sgbt","n":347,"auc":0.5641067897165458,"mean":0.576405735003296,"lo":0.5382168754119974,"hi":0.6214609426499671,"p":0.6616915422885572}],"paired":[{"model":"elasticnet","subset":"ccc_0.50","diff":-0.007910349373764,"lo":-0.0601681180399534,"hi":0.0427517436565133,"p":0.727},{"model":"elasticnet","subset":"ccc_0.70","diff":0.0176334871456822,"lo":-0.0319354026690358,"hi":0.0676751424320896,"p":0.498},{"model":"elasticnet","subset":"ccc_0.80","diff":0.0250494396835859,"lo":-0.0252258579717928,"hi":0.0753935083658219,"p":0.33},{"model":"elasticnet","subset":"ccc_0.85","diff":0.0120303230059327,"lo":-0.0426829268292683,"hi":0.0689388896414802,"p":0.672},{"model":"elasticnet","subset":"ccc_0.90","diff":0.0212590639419907,"lo":-0.0415298012424753,"hi":0.0875602197516966,"p":0.514},{"model":"elasticnet","subset":"ccc_0.95","diff":0.0339485827290705,"lo":-0.033653900649887,"hi":0.1056422796541161,"p":0.337},{"model":"sgbt","subset":"ccc_0.50","diff":0.0192814765985498,"lo":-0.019325777078566,"hi":0.0623934809624221,"p":0.37},{"model":"sgbt","subset":"ccc_0.70","diff":0.0327949901120633,"lo":-0.0044518236088959,"hi":0.0714705915035947,"p":0.084},{"model":"sgbt","subset":"ccc_0.80","diff":0.0242254449571522,"lo":-0.0141564588076331,"hi":0.0627927470529352,"p":0.217},{"model":"sgbt","subset":"ccc_0.85","diff":0.0304878048780488,"lo":-0.0095513340132551,"hi":0.0731986957529461,"p":0.154},{"model":"sgbt","subset":"ccc_0.90","diff":0.0107119314436388,"lo":-0.0423058836799147,"hi":0.0641385251864539,"p":0.705},{"model":"sgbt","subset":"ccc_0.95","diff":-0.0313117996044824,"lo":-0.0902969331407205,"hi":0.0274767031754153,"p":0.276}],"perm":[{"model":"elasticnet","subset":"all","auc":0.5644363876071193,"p":0.0871825634873025},{"model":"elasticnet","subset":"ccc_0.50","auc":0.5565260382333553,"p":0.1181763647270545},{"model":"elasticnet","subset":"ccc_0.70","auc":0.5820698747528016,"p":0.0415916816636672},{"model":"elasticnet","subset":"ccc_0.80","auc":0.5894858272907053,"p":0.026994601079784},{"model":"elasticnet","subset":"ccc_0.85","auc":0.5764667106130521,"p":0.053989202159568},{"model":"elasticnet","subset":"ccc_0.90","auc":0.5856954515491101,"p":0.0335932813437312},{"model":"elasticnet","subset":"ccc_0.95","auc":0.5983849703361899,"p":0.0163967206558688},{"model":"sgbt","subset":"all","auc":0.5954185893210283,"p":0.0197960407918416},{"model":"sgbt","subset":"ccc_0.50","auc":0.6147000659195782,"p":0.007998400319936},{"model":"sgbt","subset":"ccc_0.70","auc":0.6282135794330916,"p":0.0045990801839632},{"model":"sgbt","subset":"ccc_0.80","auc":0.6196440342781806,"p":0.0051989602079584},{"model":"sgbt","subset":"ccc_0.85","auc":0.6259063941990771,"p":0.0043991201759648},{"model":"sgbt","subset":"ccc_0.90","auc":0.6061305207646671,"p":0.0131973605278944},{"model":"sgbt","subset":"ccc_0.95","auc":0.5641067897165458,"p":0.0853829234153169}]},"dist":{"tiers":[{"tier":"negligible","n":119},{"tier":"small","n":86},{"tier":"medium","n":63},{"tier":"large","n":279}],"n_features":547,"frac_large":0.5100548446069469,"families":[{"family":"linguistic","n":99,"median":0.8686,"same":22,"moderate":11,"different":66,"ks_raw":0.4458,"ks_rz":0.4045},{"family":"temporal","n":23,"median":0.9762,"same":15,"moderate":0,"different":8,"ks_raw":0.5043,"ks_rz":0.0847},{"family":"acoustic","n":420,"median":0.9779,"same":307,"moderate":51,"different":62,"ks_raw":0.4181,"ks_rz":0.0842},{"family":"semantic","n":4,"median":0.9739,"same":3,"moderate":1,"different":0,"ks_raw":0.4069,"ks_rz":0.1098}],"hist_bins":[0.2,0.22,0.24,0.26,0.28,0.3,0.32,0.34,0.36,0.38,0.4,0.42,0.44,0.46,0.48,0.5,0.52,0.54,0.56,0.58,0.6,0.62,0.64,0.66,0.68,0.7,0.72,0.74,0.76,0.78,0.8,0.82,0.84,0.86,0.88,0.9,0.92,0.94,0.96,0.98,1.0],"hist":{"linguistic":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,2,14,18,21,9,4,3,7,7,12],"temporal":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,4,2,0,0,0,1,4,10],"semantic":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,1],"acoustic":[4,0,2,0,1,1,0,1,0,3,1,1,0,2,0,1,1,0,0,1,0,1,2,0,0,3,0,5,1,3,4,1,6,8,9,8,27,49,73,201]},"n_ccc":546,"frac_same":0.6355311355311355},"weights":{"en":[{"feature":"ix_interruption_rate","family":"temporal","b90":-0.4525329233978567,"s90":1.0,"bic":0.0,"sic":0.0,"u90":0.3678115951285982,"uic":0.5},{"feature":"Leisure","family":"linguistic","b90":-0.3072308995510076,"s90":1.0,"bic":0.0,"sic":0.0,"u90":0.4012253023335037,"uic":0.4751153592617008},{"feature":"egemaps_F0semitoneFrom27.5Hz_sma3nz_meanFallingSlope_std","family":"acoustic","b90":-0.2833531573935012,"s90":1.0,"bic":0.00049339766946,"sic":0.02,"u90":0.4788792369272697,"uic":0.5172214897824654},{"feature":"egemaps_F0semitoneFrom27.5Hz_sma3nz_pctlrange0-2_whole","family":"acoustic","b90":0.2519644964303829,"s90":0.98,"bic":-0.0004102934245511,"sic":0.06,"u90":0.5712133793220917,"uic":0.5566084377059988},{"feature":"sm_content_diversity","family":"semantic","b90":-0.2283368254375186,"s90":0.92,"bic":-0.0015918963375285,"sic":0.02,"u90":0.5004870337250894,"uic":0.5049439683586026},{"feature":"Family","family":"linguistic","b90":0.1976235707982638,"s90":1.0,"bic":0.0,"sic":0.0,"u90":0.4808273718276273,"uic":0.4544330916282136},{"feature":"egemaps_mfcc1V_sma3nz_stddevNorm_std","family":"acoustic","b90":-0.1875056525167108,"s90":0.9,"bic":-0.005642432010997,"sic":0.08,"u90":0.556996252767842,"uic":0.4862392880685563},{"feature":"mfcc_d6_mean_std","family":"acoustic","b90":-0.1799652299262733,"s90":0.88,"bic":-7.582882071081446e-06,"sic":0.02,"u90":0.4806038153636518,"uic":0.438282794990112},{"feature":"ix_n_interviewer_turns","family":"temporal","b90":0.1712729205243449,"s90":0.82,"bic":0.1100579461604936,"sic":0.66,"u90":0.5700663217509794,"uic":0.542847725774555},{"feature":"mfcc_d10_mean_whole","family":"acoustic","b90":-0.1697478440400686,"s90":0.84,"bic":0.0052086822254035,"sic":0.08,"u90":0.4780808209845001,"uic":0.5206822676334872},{"feature":"mfcc_d2_std_whole","family":"acoustic","b90":-0.1416191578315919,"s90":0.82,"bic":-0.0620295872986977,"sic":0.6,"u90":0.4563692301141202,"uic":0.394116677653263},{"feature":"egemaps_mfcc2V_sma3nz_stddevNorm_whole","family":"acoustic","b90":0.1368566922012521,"s90":0.92,"bic":-0.0695544990780753,"sic":0.7,"u90":0.5280563362289218,"uic":0.4597066578773896},{"feature":"ix_median_response_latency_sec","family":"temporal","b90":0.1306373265842418,"s90":0.88,"bic":0.1811477856608109,"sic":0.9,"u90":0.5622950732413557,"uic":0.6122280817402769},{"feature":"mfcc_8_mean_std","family":"acoustic","b90":-0.1113572337347475,"s90":0.82,"bic":0.2293662578982765,"sic":0.92,"u90":0.5428483222619656,"uic":0.6302735662491761},{"feature":"ix_interviewer_speech_rate_wps","family":"temporal","b90":-0.0256857411896619,"s90":0.48,"bic":-0.0667286664538539,"sic":0.46,"u90":0.4400389626980072,"uic":0.4546802900461436},{"feature":"ix_mean_response_latency_sec","family":"temporal","b90":0.0188000575885909,"s90":0.2,"bic":0.0969667435373554,"sic":0.64,"u90":0.5513115312553227,"uic":0.6151944627554383},{"feature":"mfcc_8_mean_whole","family":"acoustic","b90":-0.0148524775299002,"s90":0.3,"bic":-0.0607975953156013,"sic":0.6,"u90":0.5040133708056549,"uic":0.3890079103493737},{"feature":"egemaps_loudnessPeaksPerSec_std","family":"acoustic","b90":-0.0132963200395098,"s90":0.42,"bic":-0.1144382091591255,"sic":0.74,"u90":0.537121018565832,"uic":0.5061799604482532},{"feature":"mfcc_d4_std_whole","family":"acoustic","b90":-0.0123043122287755,"s90":0.24,"bic":-0.0581173644430378,"sic":0.64,"u90":0.5003033980582524,"uic":0.410596572181938}],"sgbt":[{"feature":"ix_interruption_rate","family":"temporal","i90":0.0203230021157285,"sd90":0.0071626888357652,"iic":0.0,"sdic":0.0},{"feature":"Leisure","family":"linguistic","i90":0.0049651940845889,"sd90":0.0045977444408458,"iic":-5.615905846055869e-05,"sdic":0.000873539496123},{"feature":"sm_content_density","family":"semantic","i90":0.0046410427636744,"sd90":0.0040750945435308,"iic":-0.004401745054246,"sdic":0.0114927609841366},{"feature":"egemaps_mfcc2V_sma3nz_stddevNorm_mean","family":"acoustic","i90":0.004259735922411,"sd90":0.0049138561596555,"iic":-0.0002152729811435,"sdic":0.0056289786182579},{"feature":"mfcc_d5_std_std","family":"acoustic","i90":0.0039332209803589,"sd90":0.0038731553684192,"iic":-4.415954415954548e-05,"sdic":0.0004106148521196},{"feature":"Complex nominal per T-unit","family":"linguistic","i90":0.0027911907911456,"sd90":0.0039950342185876,"iic":0.0016916107216396,"sdic":0.0099112639444025},{"feature":"ix_patient_talk_ratio","family":"temporal","i90":0.0022684404731923,"sd90":0.0025456068232537,"iic":-0.0008776188374187,"sdic":0.0027024544440838},{"feature":"egemaps_F0semitoneFrom27.5Hz_sma3nz_pctlrange0-2_whole","family":"acoustic","i90":0.0022408609743839,"sd90":0.0037939177699022,"iic":0.0006958917934609,"sdic":0.0021306667944528},{"feature":"ix_conversation_dur_sec","family":"temporal","i90":0.0021843634673033,"sd90":0.0030096042978234,"iic":-0.00126385259574,"sdic":0.0047440817739408},{"feature":"pt_long_pause_per_min","family":"temporal","i90":0.0020039293044661,"sd90":0.0033260718032599,"iic":0.0035765794288341,"sdic":0.009436584854926},{"feature":"mfcc_d5_mean_mean","family":"acoustic","i90":0.0004157772757628,"sd90":0.0023669376483594,"iic":0.0092902155946109,"sdic":0.0149805056111705},{"feature":"ix_median_response_latency_sec","family":"temporal","i90":0.0002349575550798,"sd90":0.0019915942694131,"iic":0.0107231340494816,"sdic":0.0238804657946769},{"feature":"pt_pause_ratio","family":"temporal","i90":2.955078147219994e-05,"sd90":0.0008730937479763,"iic":0.0060054061443025,"sdic":0.0092171389804572},{"feature":"mfcc_8_mean_whole","family":"acoustic","i90":-1.1488726780213312e-05,"sd90":0.0009344442930655,"iic":0.0029981928026537,"sdic":0.0103807815863962},{"feature":"Inhibition","family":"linguistic","i90":-6.472282762155502e-05,"sd90":0.000926080481202,"iic":0.0022946156387177,"sdic":0.0081074436304355},{"feature":"ix_mean_response_latency_sec","family":"temporal","i90":-9.462433267709274e-05,"sd90":0.0012920126674148,"iic":0.0045191950646374,"sdic":0.0090646409319482},{"feature":"mfcc_12_mean_whole","family":"acoustic","i90":-0.000122423465931,"sd90":0.0005401220630016,"iic":0.0038272171565817,"sdic":0.0100462657936598},{"feature":"mfcc_8_mean_std","family":"acoustic","i90":-0.0001396357926914,"sd90":0.0020290066981288,"iic":0.0147477023247381,"sdic":0.0158247633477629},{"feature":"ix_std_response_latency_sec","family":"temporal","i90":-0.0004960529344694,"sd90":0.0017952402399988,"iic":0.0026485879110657,"sdic":0.0137358355939412}],"agree":[{"cut":0.03,"n":251,"agree":0.7290836653386454},{"cut":0.05,"n":137,"agree":0.8394160583941606},{"cut":0.08,"n":19,"agree":1.0}],"agree_fam":[{"family":"linguistic","n":41,"agree":1.0},{"family":"temporal","n":16,"agree":1.0},{"family":"semantic","n":2,"agree":1.0},{"family":"acoustic","n":78,"agree":0.717948717948718}],"flips":[{"model":"elasticnet","flip_mean":-0.00236314820918476,"flip_n":32,"same_mean":0.0023817137122561323,"same_n":67},{"model":"sgbt","flip_mean":-0.0009657218193803578,"flip_n":30,"same_mean":0.00011726997410984,"same_n":69}],"agreement":[{"model":"sgbt","view":"perm","obs":0.0080612819714864,"ctrl":[0.0057569168300275,0.1269363783892932,0.0802501433812714,0.0745499516438128,0.1115494286175904,0.0672352023774358,0.0996173609410628,0.163496816879346,0.1704148709524565,-0.0142730739682927],"oob90":0.647264777534097,"oobic":0.4800972969658233,"oobctrl":0.5992804873825724},{"model":"elasticnet","view":"perm","obs":0.0135528680262067,"ctrl":[0.1217093578913994,0.0423850281269737,0.1988600418113589,-0.0133505291510831,0.0497860758171413,0.0482953888323536,0.1180020601771106,0.0742734860055509,0.1148023008659044,0.1386552622211255],"oob90":0.6473562339341171,"oobic":0.5170441160285195,"oobctrl":0.6101034621061656},{"model":"elasticnet","view":"en_abs_coef","obs":0.0992490114229529,"ctrl":[0.4019083312580833,0.3646061830078095,0.4214439883900881,0.398155278969961,0.3934589422961003,0.4651871893678587,0.4459394303641404,0.4524949325190668,0.3820007377798255,0.437165080877912],"oob90":0.6473562339341171,"oobic":0.5170441160285195,"oobctrl":0.6101034621061656}],"n_sel90":146,"n_selic":13},"date":"2026-10-25"};
+
+/* ── helpers ─────────────────────────────────────────────── */
+const NS = "http://www.w3.org/2000/svg";
+function S(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k.startsWith("$")) e.style.setProperty(k.slice(1), v); else e.setAttribute(k, v);
+  }
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const $ = id => document.getElementById(id);
+const f3 = x => x.toFixed(3), f2 = x => x.toFixed(2);
+const sgn = (x, d = 3) => (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toFixed(d);
+const pct = x => Math.round(x * 100) + "%";
+const thrLabel = t => t == null ? "All" : "≥" + (t * 1000 % 10 === 0 && t * 100 % 1 === 0 ? t.toFixed(2) : String(t));
+const FAM = { linguistic: "Linguistic", temporal: "Temporal", semantic: "Semantic", acoustic: "Acoustic" };
+const MODEL = { sgbt: "Boosted trees (SGBT)", elasticnet: "Elastic Net" };
+const pretty = (f, n = 44) => {
+  const s = f.replace(/^egemaps_/, "eGeMAPS ").replace(/_sma3nz|_sma3/g, "").replace(/F0semitoneFrom27\.5Hz/, "F0").replace(/_/g, " ");
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+};
+const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, var(--surface))`;
+function mk(host, w, h, label) {
+  host.textContent = "";
+  return S("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: "img", "aria-label": label }, host);
+}
+function yScale(d0, d1, r0, r1) { return v => r0 + (v - d0) / (d1 - d0) * (r1 - r0); }
+
+/* rounded data-end horizontal bar growing from x0 (baseline) to x1 */
+function barPath(x0, x1, y, h, r) {
+  const dir = x1 >= x0 ? 1 : -1, len = Math.abs(x1 - x0), rr = Math.min(r, len, h / 2);
+  if (len < 0.5) return "";
+  const e = x0 + dir * len;
+  return `M${x0},${y} H${e - dir * rr} a${rr},${rr} 0 0 ${dir > 0 ? 1 : 0} ${dir * rr},${rr} ` +
+         `v${h - 2 * rr} a${rr},${rr} 0 0 ${dir > 0 ? 1 : 0} ${-dir * rr},${rr} H${x0} Z`;
+}
+/* rounded data-end vertical column growing from y0 (baseline) to y1 */
+function colPath(x, w, y0, y1, r) {
+  const dir = y1 <= y0 ? -1 : 1, len = Math.abs(y1 - y0), rr = Math.min(r, len, w / 2);
+  if (len < 0.5) return "";
+  const e = y0 + dir * len, sw = dir < 0 ? 1 : 0;
+  return `M${x},${y0} V${e - dir * rr} a${rr},${rr} 0 0 ${sw} ${rr},${dir * rr} h${w - 2 * rr} ` +
+         `a${rr},${rr} 0 0 ${sw} ${rr},${-dir * rr} V${y0} Z`;
+}
+
+/* ── tooltip (textContent only) ─────────────────────────── */
+const tip = $("tip");
+function tipContent(spec) {
+  tip.textContent = "";
+  const t = document.createElement("div"); t.className = "t"; t.textContent = spec.title; tip.appendChild(t);
+  for (const r of spec.rows || []) {
+    const row = document.createElement("div"); row.className = "r";
+    if (r.color) { const k = document.createElement("span"); k.className = "key"; k.style.borderColor = r.color; row.appendChild(k); }
+    const v = document.createElement("span"); v.className = "val"; v.textContent = r.value; row.appendChild(v);
+    const l = document.createElement("span"); l.className = "lab"; l.textContent = r.label; row.appendChild(l);
+    tip.appendChild(row);
+  }
+  if (spec.note) { const n = document.createElement("div"); n.className = "note"; n.textContent = spec.note; tip.appendChild(n); }
+}
+function placeTip(x, y) {
+  const r = tip.getBoundingClientRect(); let tx = x + 14, ty = y + 14;
+  if (tx + r.width > innerWidth - 8) tx = x - r.width - 14;
+  if (ty + r.height > innerHeight - 8) ty = y - r.height - 14;
+  tip.style.left = Math.max(8, tx) + "px"; tip.style.top = Math.max(8, ty) + "px";
+}
+function showTip(spec, x, y) { tipContent(spec); tip.classList.add("on"); placeTip(x, y); }
+function hideTip() { tip.classList.remove("on"); }
+/* attach tooltip to a mark: pointer + keyboard focus */
+function tipOn(node, spec) {
+  node.setAttribute("data-tip", "1"); node.setAttribute("tabindex", "0");
+  node.setAttribute("aria-label", spec.title + ". " + (spec.rows || []).map(r => `${r.label} ${r.value}`).join(", "));
+  node.addEventListener("pointermove", e => showTip(spec, e.clientX, e.clientY));
+  node.addEventListener("pointerleave", hideTip);
+  node.addEventListener("focus", () => { const b = node.getBoundingClientRect(); showTip(spec, b.right, b.top); });
+  node.addEventListener("blur", hideTip);
+}
+
+/* ── table views ────────────────────────────────────────── */
+function table(host, caption, heads, rows) {
+  host.textContent = "";
+  const d = document.createElement("details"); d.className = "table-view";
+  const s = document.createElement("summary"); s.textContent = "View as table"; d.appendChild(s);
+  const wrap = document.createElement("div"); wrap.className = "tablewrap";
+  const t = document.createElement("table");
+  const cap = document.createElement("caption"); cap.className = "small"; cap.style.textAlign = "left"; cap.textContent = caption; t.appendChild(cap);
+  const hr = t.createTHead().insertRow();
+  heads.forEach((h, i) => { const th = document.createElement("th"); th.textContent = h; if (i) th.className = "n"; hr.appendChild(th); });
+  const tb = t.createTBody();
+  rows.forEach(r => { const tr = tb.insertRow(); r.forEach((c, i) => { const td = tr.insertCell(); td.textContent = c; if (i) td.className = "n"; }); });
+  wrap.appendChild(t); d.appendChild(wrap); host.appendChild(d);
+}
+
+/* ── chart 1: effect-size tiers ─────────────────────────── */
+const TIER_NAME = { negligible: "Negligible (< 0.2)", small: "Small (0.2–0.5)", medium: "Medium (0.5–0.8)", large: "Large (≥ 0.8)" };
+const TIER_SHORT = { negligible: ["Negligible", "d < 0.2"], small: ["Small", "0.2–0.5"], medium: ["Medium", "0.5–0.8"], large: ["Large", "d ≥ 0.8"] };
+function drawTiers() {
+  const host = $("c-tiers"), W = host.clientWidth, H = 104, gap = 2;
+  const svg = mk(host, W, H, "Features by size of raw difference between cohorts");
+  const tot = D.dist.tiers.reduce((a, t) => a + t.n, 0), usable = W - gap * 3;
+  const pcts = [18, 40, 68, 100]; let x = 0;
+  D.dist.tiers.forEach((t, i) => {
+    const w = t.n / tot * usable;
+    const r = S("rect", { x, y: 6, width: w, height: 30, rx: 4, $fill: tint("var(--s1)", pcts[i]) }, svg);
+    tipOn(r, { title: TIER_NAME[t.tier], rows: [{ label: "features", value: String(t.n) }, { label: "share", value: pct(t.n / tot) }] });
+    S("text", { x, y: 58, class: "strong" }, svg, String(t.n));
+    S("text", { x, y: 75 }, svg, TIER_SHORT[t.tier][0]);
+    S("text", { x, y: 91, class: "mut" }, svg, TIER_SHORT[t.tier][1]);
+    x += w + gap;
+  });
+  table($("t-tiers"), "Features by |Cohen’s d| between cohorts", ["Tier", "Features", "Share"],
+    D.dist.tiers.map(t => [TIER_NAME[t.tier], t.n, pct(t.n / tot)]));
+}
+
+/* ── chart 2: CCC buckets by family ─────────────────────── */
+function drawCCC() {
+  const host = $("c-ccc"), W = host.clientWidth, rowH = 40, H = rowH * 4 + 8, x0 = 150, x1 = W - 90, gap = 2;
+  const svg = mk(host, W, H, "Features by closeness of distribution match, per family");
+  const fams = ["linguistic", "temporal", "semantic", "acoustic"].map(f => D.dist.families.find(r => r.family === f));
+  fams.forEach((f, i) => {
+    const y = 4 + i * rowH; let x = x0;
+    S("text", { x: 0, y: y + 14, class: "strong" }, svg, FAM[f.family]);
+    S("text", { x: 0, y: y + 29, class: "mut" }, svg, f.n + " features");
+    [["same", "var(--s1)", "Same shape"], ["moderate", tint("var(--s1)", 38), "Moderate"], ["different", "var(--s2)", "Different"]].forEach(([k, col, nm]) => {
+      const w = f[k] / f.n * (x1 - x0 - 2 * gap);
+      if (w <= 0) return;
+      const r = S("rect", { x, y: y + 6, width: w, height: 24, rx: 4, $fill: col }, svg);
+      tipOn(r, { title: `${FAM[f.family]}: ${nm.toLowerCase()}`, rows: [{ label: "features", value: `${f[k]} of ${f.n}` }, { label: "share", value: pct(f[k] / f.n) }],
+        note: `Median CCC ${f.median.toFixed(3)}` });
+      x += w + gap;
+    });
+    S("text", { x: x1 + 8, y: y + 23, class: "strong" }, svg, pct(f.same / f.n) + " same");
+  });
+  table($("t-ccc"), "Features by Q-Q CCC bucket", ["Family", "Features", "Same (≥ 0.95)", "Moderate", "Different (< 0.90)", "Median CCC"],
+    fams.map(f => [FAM[f.family], f.n, f.same, f.moderate, f.different, f.median.toFixed(3)]));
+}
+
+/* ── chart 3: AUC vs threshold, one panel per model ─────── */
+const SER = [
+  { key: "tr", name: "90+ → I-CONECT (transfer)", c: "var(--s2)", shape: "circle" },
+  { key: "cv90", name: "90+ within-cohort", c: "var(--s1)", shape: "square" },
+  { key: "cvic", name: "I-CONECT within-cohort", c: "var(--s3)", shape: "diamond" },
+];
+function marker(svg, shape, cx, cy, color, r) {
+  const o = { $fill: color, $stroke: "var(--surface)", "stroke-width": 2 };
+  if (shape === "square") return S("rect", { x: cx - r, y: cy - r, width: 2 * r, height: 2 * r, rx: 1.5, ...o }, svg);
+  if (shape === "diamond") return S("path", { d: `M${cx},${cy - r - 1} L${cx + r + 1},${cy} L${cx},${cy + r + 1} L${cx - r - 1},${cy} Z`, ...o }, svg);
+  return S("circle", { cx, cy, r, ...o }, svg);
+}
+function drawAUC(model) {
+  const host = $("c-auc-" + model), W = host.clientWidth, H = 290, m = { l: 78, r: 12, t: 26, b: 44 };
+  const rows = D.transfer[model], n = rows.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const svg = mk(host, W, H, `${MODEL[model]}: AUC against similarity threshold`);
+  const y = yScale(0.75, 0.40, m.t, m.t + ih), x = i => m.l + (i + 0.5) * iw / n;
+  S("text", { x: 0, y: 12, class: "strong" }, svg, MODEL[model]);
+  for (let v = 0.40; v <= 0.7501; v += 0.05) {
+    S("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: "grid" }, svg);
+    S("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, svg, Math.abs(v - 0.5) < 1e-6 ? "chance 0.50" : v.toFixed(2));
+  }
+  S("line", { x1: m.l, x2: W - m.r, y1: y(0.5), y2: y(0.5), class: "axis" }, svg);
+  const skip = W < 620 ? 2 : 1;
+  rows.forEach((r, i) => {
+    if (i % skip) return;
+    S("text", { x: x(i), y: H - 24, "text-anchor": "middle" }, svg, thrLabel(r.thr));
+    S("text", { x: x(i), y: H - 9, "text-anchor": "middle", class: "mut" }, svg, "n=" + r.n);
+  });
+  const band = rows.map((r, i) => `${x(i)},${y(r.hi)}`).concat(rows.map((r, i) => `${x(n - 1 - i)},${y(rows[n - 1 - i].lo)}`)).join(" ");
+  S("polygon", { points: band, $fill: "var(--s2)", $opacity: 0.12 }, svg);
+  SER.forEach(s => {
+    S("polyline", { points: rows.map((r, i) => `${x(i)},${y(r[s.key])}`).join(" "), fill: "none", $stroke: s.c, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  });
+  const cross = S("line", { y1: m.t, y2: m.t + ih, class: "axis", $opacity: 0 }, svg);
+  SER.forEach(s => rows.forEach((r, i) => marker(svg, s.shape, x(i), y(r[s.key]), s.c, 4)));
+  rows.forEach((r, i) => {
+    const hit = S("rect", { x: x(i) - iw / n / 2, y: m.t, width: iw / n, height: ih, class: "hit" }, svg);
+    const spec = { title: r.thr == null ? `All features (n = ${r.n})` : `CCC ${thrLabel(r.thr)} (n = ${r.n} features)`,
+      rows: [{ color: "var(--s2)", label: "transfer", value: `${f3(r.tr)} [${f2(r.lo)}, ${f2(r.hi)}]` },
+             { color: "var(--s1)", label: "90+ within-cohort", value: f3(r.cv90) },
+             { color: "var(--s3)", label: "I-CONECT within-cohort", value: f3(r.cvic) }] };
+    tipOn(hit, spec);
+    const on = () => { cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.style.opacity = 1; };
+    const off = () => { cross.style.opacity = 0; };
+    hit.addEventListener("pointerenter", on); hit.addEventListener("pointerleave", off);
+    hit.addEventListener("focus", on); hit.addEventListener("blur", off);
+  });
+}
+function tableAUC() {
+  const rows = [];
+  ["sgbt", "elasticnet"].forEach(m => D.transfer[m].forEach(r => rows.push([MODEL[m], r.thr == null ? "All" : thrLabel(r.thr), r.n,
+    `${f3(r.tr)} [${f2(r.lo)}, ${f2(r.hi)}]`, f3(r.cv90), f3(r.cvic), f3(r.rev)])));
+  table($("t-auc"), "AUC by model and similarity threshold", ["Model", "Threshold", "Features", "90+ → I-CONECT [95% CI]", "90+ within", "I-CONECT within", "I-CONECT → 90+"], rows);
+}
+
+/* ── chart 4: random-subset control ─────────────────────── */
+let randMode = "stratified";
+function drawRand(model) {
+  const host = $("c-rand-" + model), W = host.clientWidth, H = 250, m = { l: 44, r: 12, t: 26, b: 44 };
+  const rows = D.stats.random.filter(r => r.model === model && r.mode === randMode).sort((a, b) => a.thr - b.thr);
+  const n = rows.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const svg = mk(host, W, H, `${MODEL[model]}: selected vs random feature sets`);
+  const y = yScale(0.70, 0.50, m.t, m.t + ih), x = i => m.l + (i + 0.5) * iw / n;
+  S("text", { x: 0, y: 12, class: "strong" }, svg, MODEL[model]);
+  for (let v = 0.50; v <= 0.7001; v += 0.05) {
+    S("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: "grid" }, svg);
+    S("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, svg, v.toFixed(2));
+  }
+  rows.forEach((r, i) => {
+    S("text", { x: x(i), y: H - 24, "text-anchor": "middle" }, svg, thrLabel(r.thr));
+    S("text", { x: x(i), y: H - 9, "text-anchor": "middle", class: "mut" }, svg, "n=" + r.n);
+    S("line", { x1: x(i), x2: x(i), y1: y(r.hi), y2: y(r.lo), $stroke: "var(--muted)", "stroke-width": 8, "stroke-linecap": "round", $opacity: 0.35 }, svg);
+    S("line", { x1: x(i) - 9, x2: x(i) + 9, y1: y(r.mean), y2: y(r.mean), $stroke: "var(--ink2)", "stroke-width": 2 }, svg);
+    marker(svg, "circle", x(i), y(r.auc), "var(--s2)", 5);
+    const hit = S("rect", { x: x(i) - iw / n / 2, y: m.t, width: iw / n, height: ih, class: "hit" }, svg);
+    tipOn(hit, { title: `CCC ${thrLabel(r.thr)} (n = ${r.n} features)`,
+      rows: [{ color: "var(--s2)", label: "selected set", value: f3(r.auc) },
+             { color: "var(--ink2)", label: "random mean", value: `${f3(r.mean)} [${f3(r.lo)}, ${f3(r.hi)}]` },
+             { label: "one-sided p", value: r.p.toFixed(3) }] });
+  });
+}
+function tableRand() {
+  const rows = D.stats.random.slice().sort((a, b) => a.model.localeCompare(b.model) || a.mode.localeCompare(b.mode) || a.thr - b.thr)
+    .map(r => [MODEL[r.model], r.mode === "stratified" ? "Same family mix" : "Any features", thrLabel(r.thr), r.n, f3(r.auc), `${f3(r.mean)} [${f3(r.lo)}, ${f3(r.hi)}]`, r.p.toFixed(3)]);
+  table($("t-rand"), "Selected set vs 200 random sets of the same size", ["Model", "Random sets", "Threshold", "Features", "Selected AUC", "Random mean [95%]", "p"], rows);
+}
+
+/* ── chart 5: paired weight bars (Elastic Net) ──────────── */
+function drawEN() {
+  const host = $("c-en"), W = Math.max(host.clientWidth, 680), rows = D.weights.en, rowH = 26;
+  const lab = 300, gap = 28, pw = (W - lab - gap) / 2, top = 38, H = top + rows.length * rowH + 40;
+  const svg = mk(host, W, H, "Elastic Net weights of the 90+ and I-CONECT models");
+  const dom = [-0.5, 0.3], px = (v, o) => o + (v - dom[0]) / (dom[1] - dom[0]) * pw;
+  [["Trained on 90+ (868 people)", lab, "b90", "s90"], ["Trained on I-CONECT (156 people)", lab + pw + gap, "bic", "sic"]].forEach(([title, o, bk, sk]) => {
+    S("text", { x: o, y: 14, class: "strong" }, svg, title);
+    for (let v = -0.4; v <= 0.2001; v += 0.2) {
+      S("line", { x1: px(v, o), x2: px(v, o), y1: top - 8, y2: H - 34, class: Math.abs(v) < 1e-9 ? "axis" : "grid" }, svg);
+      S("text", { x: px(v, o), y: H - 18, "text-anchor": "middle" }, svg, v.toFixed(1));
+    }
+    S("text", { x: o + pw / 2, y: H - 2, "text-anchor": "middle", class: "mut" }, svg, "coefficient (per SD)");
+    rows.forEach((r, i) => {
+      const yy = top + i * rowH, v = r[bk], zero = px(0, o);
+      if (r.uic === 0.5 && bk === "bic") { S("text", { x: o + 6, y: yy + 17, class: "mut", "font-style": "italic" }, svg, "n/a: constant in I-CONECT"); return; }
+      const bar = S("path", { d: barPath(zero, px(v, o), yy + 4, 16, 4), $fill: v > 0 ? "var(--s2)" : "var(--s1)", $opacity: r[sk] >= 0.5 ? 1 : 0.3 }, svg);
+      const hit = S("rect", { x: o, y: yy, width: pw, height: rowH, class: "hit" }, svg);
+      tipOn(hit, { title: r.feature, rows: [
+        { label: "90+ model coefficient", value: `${sgn(r.b90)}  (chosen in ${pct(r.s90)})` },
+        { label: "I-CONECT model coefficient", value: r.uic === 0.5 ? "n/a (constant)" : `${sgn(r.bic)}  (chosen in ${pct(r.sic)})` },
+        { label: "single-feature AUC, 90+ / I-CONECT", value: `${f2(r.u90)} / ${r.uic === 0.5 ? "n/a" : f2(r.uic)}` }],
+        note: FAM[r.family] + " · AUC above 0.5 means higher in MCI" });
+    });
+  });
+  rows.forEach((r, i) => S("text", { x: lab - 12, y: top + i * rowH + 16, "text-anchor": "end", class: "feat" }, svg, pretty(r.feature, 42)));
+  table($("t-en"), "Elastic Net coefficients (50 bootstrap fits)", ["Feature", "Family", "90+ coef.", "90+ chosen", "I-CONECT coef.", "I-CONECT chosen", "AUC 90+", "AUC I-CONECT"],
+    rows.map(r => [r.feature, FAM[r.family], sgn(r.b90), pct(r.s90), r.uic === 0.5 ? "n/a" : sgn(r.bic), r.uic === 0.5 ? "n/a" : pct(r.sic), f3(r.u90), r.uic === 0.5 ? "n/a" : f3(r.uic)]));
+}
+
+/* ── chart 6: SGBT importance dot-and-whisker ───────────── */
+function drawSG() {
+  const host = $("c-sg"), W = Math.max(host.clientWidth, 680), rows = D.weights.sgbt, rowH = 26;
+  const lab = 300, gap = 28, pw = (W - lab - gap) / 2, top = 38, H = top + rows.length * rowH + 40;
+  const svg = mk(host, W, H, "SGBT permutation importance of the 90+ and I-CONECT models");
+  const dom = [-0.035, 0.045], px = (v, o) => o + (v - dom[0]) / (dom[1] - dom[0]) * pw;
+  [["Trained on 90+", lab, "i90", "sd90"], ["Trained on I-CONECT", lab + pw + gap, "iic", "sdic"]].forEach(([title, o, ik, sk]) => {
+    S("text", { x: o, y: 14, class: "strong" }, svg, title);
+    for (let v = -0.03; v <= 0.0401; v += 0.01) {
+      S("line", { x1: px(v, o), x2: px(v, o), y1: top - 8, y2: H - 34, class: Math.abs(v) < 1e-9 ? "axis" : "grid" }, svg);
+      if (Math.round(v * 100) % 2 === 0) S("text", { x: px(v, o), y: H - 18, "text-anchor": "middle" }, svg, v.toFixed(2));
+    }
+    S("text", { x: o + pw / 2, y: H - 2, "text-anchor": "middle", class: "mut" }, svg, "AUC drop when shuffled");
+    rows.forEach((r, i) => {
+      const yy = top + i * rowH + rowH / 2;
+      S("line", { x1: px(r[ik] - r[sk], o), x2: px(r[ik] + r[sk], o), y1: yy, y2: yy, $stroke: "var(--muted)", "stroke-width": 2 }, svg);
+      marker(svg, "circle", px(r[ik], o), yy, "var(--s4)", 5);
+      const hit = S("rect", { x: o, y: yy - rowH / 2, width: pw, height: rowH, class: "hit" }, svg);
+      tipOn(hit, { title: r.feature, rows: [
+        { label: "90+ model", value: `${sgn(r.i90, 4)} ± ${r.sd90.toFixed(4)}` },
+        { label: "I-CONECT model", value: `${sgn(r.iic, 4)} ± ${r.sdic.toFixed(4)}` }], note: FAM[r.family] });
+    });
+  });
+  rows.forEach((r, i) => S("text", { x: lab - 12, y: top + i * rowH + 17, "text-anchor": "end", class: "feat" }, svg, pretty(r.feature, 42)));
+  table($("t-sg"), "SGBT permutation importance (mean ± SD over 50 fits)", ["Feature", "Family", "90+ model", "I-CONECT model"],
+    rows.map(r => [r.feature, FAM[r.family], `${sgn(r.i90, 4)} ± ${r.sd90.toFixed(4)}`, `${sgn(r.iic, 4)} ± ${r.sdic.toFixed(4)}`]));
+}
+
+/* ── chart 7: direction agreement columns ───────────────── */
+function drawCols(hostId, items, label) {
+  const host = $(hostId), W = host.clientWidth, H = 230, m = { l: 36, r: 8, t: 22, b: 46 };
+  const svg = mk(host, W, H, label), n = items.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const y = yScale(1, 0, m.t, m.t + ih), slot = iw / n, bw = Math.min(24, slot * 0.5);
+  [0, 0.25, 0.5, 0.75, 1].forEach(v => { S("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: v === 0 ? "axis" : "grid" }, svg); S("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg, pct(v)); });
+  items.forEach((it, i) => {
+    const cx = m.l + (i + 0.5) * slot, x = cx - bw / 2;
+    const p = S("path", { d: colPath(x, bw, y(0), y(it.agree), 4), $fill: "var(--s1)" }, svg);
+    S("text", { x: cx, y: y(it.agree) - 6, "text-anchor": "middle", class: "strong" }, svg, pct(it.agree));
+    S("text", { x: cx, y: H - 26, "text-anchor": "middle" }, svg, it.name);
+    S("text", { x: cx, y: H - 11, "text-anchor": "middle", class: "mut" }, svg, "n=" + it.n);
+    const hit = S("rect", { x: cx - slot / 2, y: m.t, width: slot, height: ih, class: "hit" }, svg);
+    tipOn(hit, { title: it.name, rows: [{ label: "same direction", value: pct(it.agree) }, { label: "features", value: String(it.n) }] });
+  });
+}
+function drawDir() {
+  const w = D.weights;
+  const cuts = w.agree.map(a => ({ name: "≥ " + a.cut.toFixed(2), n: a.n, agree: a.agree }));
+  const fams = w.agree_fam.map(a => ({ name: FAM[a.family], n: a.n, agree: a.agree }));
+  drawCols("c-dir-cut", cuts, "Direction agreement by effect size");
+  drawCols("c-dir-fam", fams, "Direction agreement by feature family");
+  table($("t-dir"), "Share of features pointing the same direction in both cohorts", ["Group", "Features", "Same direction"],
+    cuts.map(c => ["Effect ≥ " + c.name.slice(2), c.n, pct(c.agree)]).concat(fams.map(c => [c.name + " (effect ≥ 0.05)", c.n, pct(c.agree)])));
+}
+
+/* ── chart 8: flip vs same-direction transfer effect ─────── */
+function drawFlip() {
+  const host = $("c-flip"), W = host.clientWidth, H = 250, m = { l: 56, r: 8, t: 22, b: 62 };
+  const svg = mk(host, W, H, "Transfer effect of features that flip direction vs those that do not");
+  const iw = W - m.l - m.r, ih = H - m.t - m.b, dom = 0.003, y = yScale(dom, -dom, m.t, m.t + ih), slot = iw / 2, bw = 24;
+  [-0.003, -0.0015, 0, 0.0015, 0.003].forEach(v => { S("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: v === 0 ? "axis" : "grid" }, svg); S("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg, sgn(v, 4).replace("+", "")); });
+  const P = { elasticnet: "p = 0.0001", sgbt: "p = 0.42" };
+  D.weights.flips.forEach((f, i) => {
+    const cx = m.l + (i + 0.5) * slot;
+    [[f.flip_mean, f.flip_n, "var(--s2)", -bw - 3, "Flips"], [f.same_mean, f.same_n, "var(--s1)", 3, "Same direction"]].forEach(([v, n, col, dx, nm]) => {
+      const x = cx + dx, vy = y(v);
+      S("path", { d: colPath(x, bw, y(0), vy, 4), $fill: col }, svg);
+      S("text", { x: x + bw / 2, y: v < 0 ? vy + 15 : vy - 6, "text-anchor": "middle", class: "strong" }, svg, sgn(v, 4));
+      const hit = S("rect", { x: x - 2, y: m.t, width: bw + 4, height: ih, class: "hit" }, svg);
+      tipOn(hit, { title: `${MODEL[f.model]}: ${nm.toLowerCase()}`, rows: [{ label: "mean effect on AUC", value: sgn(v, 4) }, { label: "features", value: String(n) }] });
+    });
+    S("text", { x: cx, y: H - 30, "text-anchor": "middle", class: "strong" }, svg, MODEL[f.model]);
+    S("text", { x: cx, y: H - 14, "text-anchor": "middle", class: "mut" }, svg, `${f.flip_n} flip vs ${f.same_n} same · ${P[f.model]}`);
+  });
+  table($("t-flip"), "Mean transfer permutation importance on I-CONECT, top-100 features of the 90+ model", ["Model", "Flip: features", "Flip: mean", "Same: features", "Same: mean"],
+    D.weights.flips.map(f => [MODEL[f.model], f.flip_n, sgn(f.flip_mean, 4), f.same_n, sgn(f.same_mean, 4)]));
+}
+
+/* ── chart 9: agreement strip plot ──────────────────────── */
+const VIEW = { perm: "permutation importance", en_abs_coef: "coefficient size" };
+function drawAgree() {
+  const host = $("c-agree"), W = host.clientWidth, rows = D.weights.agreement, rowH = 44, m = { l: 240, r: 14, t: 8, b: 40 };
+  const H = m.t + rows.length * rowH + m.b, iw = W - m.l - m.r;
+  const svg = mk(host, W, H, "Agreement of feature weights with the 90+ model");
+  const x = v => m.l + (v + 0.1) / 0.65 * iw;
+  for (let v = 0; v <= 0.5001; v += 0.1) { S("line", { x1: x(v), x2: x(v), y1: m.t, y2: H - m.b + 4, class: v === 0 ? "axis" : "grid" }, svg); S("text", { x: x(v), y: H - 22, "text-anchor": "middle" }, svg, v.toFixed(1)); }
+  S("text", { x: m.l + iw / 2, y: H - 4, "text-anchor": "middle", class: "mut" }, svg, "Spearman correlation with the 90+ model’s weights");
+  rows.forEach((r, i) => {
+    const yy = m.t + i * rowH + rowH / 2;
+    S("text", { x: m.l - 12, y: yy - 2, "text-anchor": "end", class: "strong" }, svg, MODEL[r.model]);
+    S("text", { x: m.l - 12, y: yy + 13, "text-anchor": "end", class: "mut" }, svg, VIEW[r.view]);
+    r.ctrl.forEach(c => S("circle", { cx: x(c), cy: yy, r: 4, $fill: "var(--muted)", $opacity: 0.55 }, svg));
+    S("path", { d: `M${x(r.obs)},${yy - 8} L${x(r.obs) + 8},${yy} L${x(r.obs)},${yy + 8} L${x(r.obs) - 8},${yy} Z`, $fill: "var(--s2)", $stroke: "var(--surface)", "stroke-width": 2 }, svg);
+    const hit = S("rect", { x: m.l, y: yy - rowH / 2, width: iw, height: rowH, class: "hit" }, svg);
+    tipOn(hit, { title: `${MODEL[r.model]}: ${VIEW[r.view]}`, rows: [
+      { color: "var(--s2)", label: "I-CONECT model", value: sgn(r.obs) },
+      { color: "var(--muted)", label: "156-person 90+ samples", value: `${sgn(Math.min(...r.ctrl))} to ${sgn(Math.max(...r.ctrl))}` }],
+      note: `Held-out accuracy: 90+ ${f2(r.oob90)}, I-CONECT ${f2(r.oobic)}, 156-person 90+ sample ${f2(r.oobctrl)}` });
+  });
+  table($("t-agree"), "Rank correlation of each model’s weights with the full 90+ model", ["Model · measure", "I-CONECT model", "156-person 90+ samples (range)", "Held-out AUC (90+ / I-CONECT / sample)"],
+    rows.map(r => [`${MODEL[r.model]} · ${VIEW[r.view]}`, sgn(r.obs), `${sgn(Math.min(...r.ctrl))} to ${sgn(Math.max(...r.ctrl))}`, `${f2(r.oob90)} / ${f2(r.oobic)} / ${f2(r.oobctrl)}`]));
+}
+
+/* ── render, toggles, theme, nav ────────────────────────── */
+function renderAll() {
+  hideTip();
+  drawTiers(); drawCCC(); drawAUC("sgbt"); drawAUC("elasticnet"); drawRand("sgbt"); drawRand("elasticnet");
+  drawEN(); drawSG(); drawDir(); drawFlip(); drawAgree();
+}
+let first = true;
+function boot() {
+  renderAll();
+  tableAUC(); tableRand();
+  first = false;
+}
+document.querySelectorAll(".toggle button").forEach(b => b.addEventListener("click", () => {
+  randMode = b.dataset.mode;
+  document.querySelectorAll(".toggle button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  drawRand("sgbt"); drawRand("elasticnet");
+}));
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderAll, 150); });
+$("themeBtn").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme") ||
+    (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+});
+/* current section in the nav */
+const links = [...document.querySelectorAll("nav.toc a")];
+const secs = [...document.querySelectorAll("main section")];
+function markNav() {
+  let cur = secs[0].id;
+  secs.forEach(sec => { if (sec.getBoundingClientRect().top < 120) cur = sec.id; });
+  links.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + cur));
+}
+addEventListener("scroll", markNav, { passive: true }); markNav();
+boot();
+</script>
+</body>
+</html>

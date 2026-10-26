@@ -1,0 +1,7 @@
+logs/
+__pycache__/
+# per-seed / per-subject outputs: regenerate by rerunning the scripts
+results/*_cv_results.csv
+results/*_transfer_predictions.csv
+results/random_subset_auc.csv
+*.sh
