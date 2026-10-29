@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cross-Cohort Feature Transfer</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --callout: #eef3fb;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --callout: #1d2430;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --callout: #1d2430;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 16px/1.62 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+a { color: var(--s1); }
+.wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+
+header.top { padding: 44px 0 20px; }
+.eyebrow { color: var(--ink2); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 10px; }
+h1 { font-size: clamp(28px, 4.4vw, 40px); line-height: 1.16; margin: 0 0 12px; letter-spacing: -.01em; }
+.subtitle { color: var(--ink2); font-size: 18px; margin: 0 0 14px; max-width: 740px; }
+.meta { color: var(--ink2); font-size: 14px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+button.theme {
+  font: inherit; font-size: 13px; color: var(--ink2); background: transparent; cursor: pointer;
+  border: 1px solid var(--axis); border-radius: 999px; padding: 3px 12px;
+}
+button.theme:hover { background: var(--grid); }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 20; background: var(--page);
+  border-bottom: 1px solid var(--grid); overflow-x: auto; white-space: nowrap;
+}
+nav.toc .wrap { display: flex; gap: 4px; }
+nav.toc a {
+  color: var(--ink2); text-decoration: none; font-size: 14px; padding: 12px 10px;
+  border-bottom: 2px solid transparent;
+}
+nav.toc a:hover { color: var(--ink); }
+nav.toc a.on { color: var(--ink); border-bottom-color: var(--s1); }
+
+section { padding: 44px 0 8px; }
+section + section { border-top: 1px solid var(--grid); margin-top: 36px; }
+h2 { font-size: 26px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.005em; }
+h2 .num { color: var(--muted); font-weight: 400; margin-right: 8px; }
+h3 { font-size: 18px; margin: 30px 0 6px; }
+p { margin: 10px 0; }
+.lead { font-size: 18px; color: var(--ink); max-width: 760px; }
+ul { padding-left: 22px; } li { margin: 6px 0; }
+.small { font-size: 14px; color: var(--ink2); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 24px 0; }
+.stat { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px 18px; }
+.stat .v { font-size: 44px; line-height: 1.05; font-weight: 650; letter-spacing: -.02em; }
+.stat .l { margin-top: 6px; font-size: 15px; font-weight: 600; }
+.stat .d { margin-top: 4px; font-size: 13.5px; color: var(--ink2); }
+
+.callout { background: var(--callout); border-radius: 12px; padding: 14px 18px; margin: 20px 0; border-left: 4px solid var(--s1); }
+.callout p:first-child { margin-top: 0; } .callout p:last-child { margin-bottom: 0; }
+.callout.warn { border-left-color: var(--s2); }
+
+figure.card {
+  margin: 22px 0; background: var(--surface); border: 1px solid var(--ring);
+  border-radius: 12px; padding: 16px 16px 12px;
+}
+figure.card figcaption { font-size: 14px; color: var(--ink2); margin-top: 8px; }
+.card h4 { margin: 0 0 2px; font-size: 15px; }
+.card .sub { margin: 0 0 8px; font-size: 13.5px; color: var(--ink2); }
+.chart { position: relative; width: 100%; }
+.chart.scroll { overflow-x: auto; }
+.chart svg { display: block; overflow: visible; }
+.chart svg text { font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--ink2); }
+.chart svg text.strong { fill: var(--ink); font-weight: 600; }
+.chart svg text.mut { fill: var(--muted); }
+.chart svg text.feat { fill: var(--ink); font-size: 11.5px; }
+.chart svg .grid { stroke: var(--grid); stroke-width: 1; }
+.chart svg .axis { stroke: var(--axis); stroke-width: 1; }
+.chart svg .hit { fill: transparent; }
+.chart svg [data-tip] { cursor: default; outline: none; }
+.chart svg [data-tip]:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink2); margin: 4px 0 10px; }
+.legend span.k { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; }
+.legend i.line { width: 18px; height: 0; border-top: 2px solid; }
+.legend i.box { width: 12px; height: 12px; border-radius: 3px; }
+.legend i.dot { width: 10px; height: 10px; border-radius: 50%; }
+
+
+details { margin: 14px 0; }
+details > summary { cursor: pointer; color: var(--ink2); font-size: 14px; }
+details.tech { border: 1px solid var(--grid); border-radius: 10px; padding: 8px 14px; background: var(--surface); }
+details.tech > summary { font-weight: 600; color: var(--ink); }
+details.table-view { margin-top: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 8px 0; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--ink2); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+dl.gloss dt { font-weight: 600; margin-top: 14px; }
+dl.gloss dd { margin: 2px 0 0; color: var(--ink2); }
+
+.flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; margin: 20px 0; }
+.flow .box { flex: 1 1 170px; background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 12px 14px; font-size: 14.5px; }
+.flow .box b { display: block; margin-bottom: 2px; }
+.flow .arrow { align-self: center; color: var(--muted); font-size: 22px; }
+@media (max-width: 640px) { .flow .arrow { display: none; } }
+
+#tip {
+  position: fixed; z-index: 50; pointer-events: none; max-width: 340px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--axis);
+  border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0,0,0,.14); opacity: 0; transition: opacity .08s;
+}
+#tip.on { opacity: 1; }
+#tip .t { font-weight: 600; margin-bottom: 4px; overflow-wrap: anywhere; }
+#tip .r { display: flex; gap: 8px; align-items: baseline; }
+#tip .r .key { width: 14px; height: 0; border-top: 2px solid; flex: none; align-self: center; }
+#tip .r .val { font-weight: 650; font-variant-numeric: tabular-nums; }
+#tip .r .lab { color: var(--ink2); }
+#tip .note { color: var(--ink2); margin-top: 4px; }
+footer { padding: 40px 0 60px; color: var(--ink2); font-size: 13.5px; border-top: 1px solid var(--grid); margin-top: 48px; }
+@media print { nav.toc, button.theme { display: none; } section { break-inside: avoid-page; } details { display: block; } }
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <p class="eyebrow">Cross-cohort speech analysis · MCI</p>
+  <h1>Does matching feature distributions help speech-based models transfer between cohorts?</h1>
+  <p class="subtitle">A model trained on conversations from the 90+ cohort, tested on I-CONECT: which speech features carry over, and which ones get in the way.</p>
+  <div class="meta"><span>Report date __DATE__</span><span>Aggregate results only, no participant-level data</span>
+    <button class="theme" id="themeBtn" type="button">Toggle dark / light</button></div>
+</div></header>
+
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#summary">At a glance</a><a href="#why">Why</a><a href="#data">Data</a>
+  <a href="#distributions">Distributions</a><a href="#method">Method</a><a href="#results">Results</a>
+  <a href="#weights">Feature weights</a><a href="#meaning">Meaning</a><a href="#next">Next steps</a>
+  <a href="#appendix">Glossary</a>
+</div></nav>
+
+<main class="wrap">
+
+<!-- 0 ───────────────────────────────────────────── -->
+<section id="summary">
+  <h2>At a glance</h2>
+  <p class="lead">Small studies often want to reuse a model trained on a larger one. We asked whether
+  that works better if we keep only the speech features that look alike in both cohorts. It mostly does
+  not: filtering by similarity did not reliably help, and the strictest filters made transfer worse.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="v">0.63</div><div class="l">Best transfer accuracy (AUC)</div>
+      <div class="d">90+ model tested on I-CONECT, 95% CI 0.54–0.71. With all features: 0.56–0.60. Chance is 0.50.</div></div>
+    <div class="stat"><div class="v">p = 0.06</div><div class="l">Best filter vs. using all features</div>
+      <div class="d">Smallest p-value for any threshold vs. keeping every feature (paired bootstrap, 11 thresholds): none is significant.</div></div>
+    <div class="stat"><div class="v">0.48–0.52</div><div class="l">I-CONECT model on its own data</div>
+      <div class="d">Trained and tested within I-CONECT (156 people): no better than chance.</div></div>
+  </div>
+
+  <h3>Three findings</h3>
+  <ol>
+    <li><b>Similar-looking features are not better features.</b> Keeping only the closest-matching
+      features did not reliably improve transfer, and the strictest filters made it worse.</li>
+    <li><b>A light clean-up helps a little.</b> Dropping the 17 worst-shifted features (mostly
+      recording-condition acoustic measures) raised one model's accuracy by up to 0.03, more than random
+      feature sets of the same size, though not significantly more than using all features.</li>
+    <li><b>Turn-taking timing carries over; several acoustic features do not.</b> More interviewer turns and
+      longer response delays point towards MCI in both cohorts’ models, while several MFCC acoustic features
+      get opposite signs from the two models.</li>
+  </ol>
+  <div class="callout"><p><b>Practical takeaway.</b> Remove only the few features that are clearly shifted
+  between cohorts, and do not rely on distribution similarity as a selection rule beyond that. Matching
+  recordings and pipelines across cohorts, and combining selection with harmonization, are the more
+  promising directions, but this study did not test them.</p></div>
+</section>
+
+<!-- 1 ───────────────────────────────────────────── -->
+<section id="why">
+  <h2><span class="num">1</span>Why this question</h2>
+  <p class="lead">Speech carries early signs of cognitive decline, but labelled recordings are scarce.
+  Reusing a model trained on a large cohort would save a small study from starting over.</p>
+  <p>In this project we extract features from conversations: <em>what</em> people say (vocabulary,
+  sentence structure), <em>when</em> they say it (pauses, turn-taking), and <em>how</em> they sound
+  (pitch, voice quality). A model trained on the 90+ cohort (868 labelled participants) could help
+  I-CONECT (156 participants) if its learned patterns carry over.</p>
+  <p>They may not, because the two cohorts differ in many ways: the kind of conversation, the speech
+  recognition system, the recording setup and the age range. A feature that behaves one way in one cohort
+  can behave differently in the other.</p>
+  <div class="flow" role="img" aria-label="Experiment flow">
+    <div class="box"><b>1 · Train</b>Fit a model on the 90+ cohort, using a chosen set of speech features.</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>2 · Filter (the idea we tested)</b>Keep only features whose distributions look alike in both cohorts.</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>3 · Test</b>Apply the model, unchanged, to I-CONECT and measure how well it separates MCI from normal (AUC).</div>
+  </div>
+  <div class="callout"><p><b>Hypothesis.</b> Features that look alike across cohorts should transfer better. We
+  tested it by sweeping how strict the similarity filter is, from “keep everything” to “keep only
+  near-identical features”.</p></div>
+</section>
+
+<!-- 2 ───────────────────────────────────────────── -->
+<section id="data">
+  <h2><span class="num">2</span>The two datasets</h2>
+  <p class="lead">Two cohorts of older adults, each with a conversation recording per participant and a
+  label of MCI or normal. The same 547 speech features are available in both.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>90+ cohort</th><th>I-CONECT</th></tr></thead>
+    <tbody>
+      <tr><td>Participants in the experiment</td><td>868 (456 MCI)</td><td>156 (82 MCI)</td></tr>
+      <tr><td>Age</td><td>All 90 or older</td><td>Roughly 75–90</td></tr>
+      <tr><td>Conversation</td><td>Structured cognitive-assessment questions; median 3 min</td>
+        <td>Semi-structured video chat; two groups: 71 long (median 25 min) and 85 short (median 7.5 min)</td></tr>
+      <tr><td>Speech recognition</td><td>Whisper large-v3 with speaker separation</td><td>DeepSpeech2-based</td></tr>
+      <tr><td>Acoustic features available</td><td>All usable recordings</td><td>86 of 156 participants</td></tr>
+    </tbody></table></div>
+  <p class="small">The feature-distribution comparison in section 3 uses all 1,120 usable 90+ transcripts,
+  not only the 868 with an MCI/normal label.</p>
+
+  <h3>The 547 features</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Family</th><th class="n">Features</th><th>What it captures</th></tr></thead>
+    <tbody>
+      <tr><td>Linguistic</td><td class="n">99</td><td>Word categories, sentence structure, vocabulary diversity, response length</td></tr>
+      <tr><td>Temporal</td><td class="n">24</td><td>Pausing, speech rate and turn-taking between participant and interviewer</td></tr>
+      <tr><td>Semantic</td><td class="n">4</td><td>Content density, diversity and word frequency</td></tr>
+      <tr><td>Acoustic</td><td class="n">420</td><td>Pitch, loudness, voice quality and spectral (MFCC) summaries</td></tr>
+    </tbody></table></div>
+  <div class="callout warn"><p><b>Read the differences with care.</b> The cohorts differ in conversation type,
+  speech recognition, recording setup and population at the same time. This report describes how the
+  features differ. It does not say which of these causes is responsible.</p></div>
+</section>
+
+<!-- 3 ───────────────────────────────────────────── -->
+<section id="distributions">
+  <h2><span class="num">3</span>How different are the two cohorts?</h2>
+  <p class="lead">Taken at face value, half of the features differ strongly between the cohorts. Once each
+  cohort is rescaled on its own, about two thirds have the same shape.</p>
+
+  <figure class="card">
+    <h4>On the raw scale, half of the features differ a lot</h4>
+    <p class="sub">Number of features by size of the difference between cohort averages (Cohen’s d).</p>
+    <div class="chart" id="c-tiers"></div><div class="tbl" id="t-tiers"></div>
+    <figcaption>Cohen’s d is the gap between the two cohort averages in units of spread. Above 0.8 is a
+    large difference. The very largest are acoustic measures of moment-to-moment variation.</figcaption>
+  </figure>
+
+  <p>Much of that gap is location and scale, not shape. We rescale each cohort using its own median and
+  spread, then ask how closely the two distributions match, using a score called <b>Q-Q CCC</b> (1 = identical
+  shape). This score is what we later use to filter features.</p>
+
+  <figure class="card">
+    <h4>After rescaling each cohort, most acoustic and timing features match</h4>
+    <p class="sub">Features by how closely the two cohorts’ distributions match (Q-Q CCC).</p>
+    <div class="legend">
+      <span class="k"><i class="box" style="background:var(--s1)"></i>Same shape (CCC ≥ 0.95)</span>
+      <span class="k"><i class="box" style="background:color-mix(in srgb, var(--s1) 38%, var(--surface))"></i>Moderate (0.90–0.95)</span>
+      <span class="k"><i class="box" style="background:var(--s2)"></i>Different (&lt; 0.90)</span></div>
+    <div class="chart" id="c-ccc"></div><div class="tbl" id="t-ccc"></div>
+    <figcaption>Linguistic features keep a different shape: I-CONECT’s long conversations inflate word and
+    clause counts, and rescaling cannot undo that. One timing feature is constant in I-CONECT and has no
+    score.</figcaption>
+  </figure>
+
+  <details class="tech"><summary>Technical detail</summary>
+    <p>Q-Q CCC is Lin’s concordance correlation between the 5th–95th percentiles of the two cohorts’
+    robust-z-scored distributions (z = (x − median) / IQR, computed within each cohort). Median KS
+    statistic falls from 0.44 on the raw scale to 0.09 after rescaling for all features, but only from
+    0.45 to 0.40 for linguistic features. I-CONECT’s durations are bimodal: count-like linguistic
+    features shift only in the long group, while ratio measures such as MTLD barely shift. Rhythm features
+    (pause ratio, turns per minute) differ in both groups, independent of length.</p></details>
+</section>
+
+<!-- 4 ───────────────────────────────────────────── -->
+<section id="method">
+  <h2><span class="num">4</span>How we tested it</h2>
+  <p class="lead">We trained on 90+ using only features above a chosen similarity score, tested on
+  I-CONECT, and compared against several baselines that show how much of any gain is real.</p>
+  <ul>
+    <li><b>Similarity threshold.</b> 12 settings from “all 547 features” to “only the 36 features with CCC ≥ 0.995”.</li>
+    <li><b>Two models.</b> A boosted-tree model (SGBT) and a regularized logistic regression (Elastic Net),
+      so the result does not depend on one model type.</li>
+    <li><b>Accuracy measure.</b> AUC: the chance that the model scores a random MCI participant higher than a
+      random normal one. 0.5 is a coin flip, 1.0 is perfect.</li>
+  </ul>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Check</th><th>Question it answers</th></tr></thead>
+    <tbody>
+      <tr><td>Within-cohort cross-validation</td><td>How well can each cohort predict its own labels? (the ceiling for transfer)</td></tr>
+      <tr><td>Reverse transfer (I-CONECT → 90+)</td><td>Does the pattern hold in the other direction?</td></tr>
+      <tr><td>Random feature subsets of equal size</td><td>Is a similarity-selected set better than a random set of the same size?</td></tr>
+      <tr><td>Label permutation</td><td>Is transfer better than chance at all?</td></tr>
+      <tr><td>Paired bootstrap vs. all features</td><td>Is any filter better than doing nothing?</td></tr>
+    </tbody></table></div>
+  <details class="tech"><summary>Technical detail</summary>
+    <p>Subject-level mean features; each cohort robust-z-scored with its own median and IQR; transfer =
+    single fit on all of one cohort, 95% bootstrap CI on the target. Within-cohort CV is
+    StratifiedGroupKFold(5) × 10 seeds with normalization fit on the training fold. Random-subset control:
+    200 random sets per threshold, drawn from all 547 features and matched to the selected set in size only. Permutation test: 5,000 label
+    permutations. Paired bootstrap: 2,000 resamples of the same I-CONECT participants across all subsets.</p></details>
+</section>
+
+<!-- 5 ───────────────────────────────────────────── -->
+<section id="results">
+  <h2><span class="num">5</span>Does filtering by similarity help?</h2>
+  <p class="lead">A little at moderate settings, not at strict ones, and not reliably compared with using
+  every feature.</p>
+
+  <figure class="card">
+    <h4>Transfer accuracy as the similarity filter gets stricter</h4>
+    <p class="sub">AUC on I-CONECT (orange, shaded = 95% CI) against how well each cohort predicts its own labels.</p>
+    <div class="legend">
+      <span class="k"><i class="line" style="border-color:var(--s2)"></i>● 90+ → I-CONECT (transfer)</span>
+      <span class="k"><i class="line" style="border-color:var(--s1)"></i>■ 90+ within-cohort</span>
+      <span class="k"><i class="line" style="border-color:var(--s3)"></i>◆ I-CONECT within-cohort</span></div>
+    <div class="chart" id="c-auc-sgbt"></div>
+    <div class="chart" id="c-auc-elasticnet"></div>
+    <div class="tbl" id="t-auc"></div>
+    <figcaption>Hover for values. Every transfer interval is about ±0.09 wide, so most differences between
+    thresholds are within noise.</figcaption>
+  </figure>
+
+  <ul>
+    <li><b>Boosted trees (SGBT)</b> gain up to +0.033 at moderate thresholds (CCC ≥ 0.50–0.85), then fall back to the
+      baseline.</li>
+    <li><b>Elastic Net</b> drifts up to 0.63 at ≥ 0.98, but the curve is erratic, and its best threshold is not SGBT’s.</li>
+    <li><b>Accuracy within 90+ falls steadily</b> as features are removed. Every filter step costs accuracy on the cohort the model learned from.</li>
+    <li><b>The I-CONECT model, trained and tested on its own data, is at chance.</b> Transfer from 90+ is
+      better than this, so borrowing from the larger cohort does help. The question is only which features
+      to use.</li>
+  </ul>
+
+  <h3>Is the gain more than luck?</h3>
+  <figure class="card">
+    <h4>Similarity-selected features vs. random features of the same size</h4>
+    <p class="sub">Orange dot: the selected set. Grey bar: range of 200 random sets of the same size, drawn from all features (95%); tick: their mean.</p>
+    <div class="legend">
+      <span class="k"><i class="dot" style="background:var(--s2)"></i>Similarity-selected set</span>
+      <span class="k"><i class="box" style="background:var(--muted);opacity:.4;width:8px"></i>95% range of 200 random sets</span>
+      <span class="k"><i class="line" style="border-color:var(--ink2);width:14px"></i>Their mean</span></div>
+    <div class="chart" id="c-rand-sgbt"></div>
+    <div class="chart" id="c-rand-elasticnet"></div>
+    <div class="tbl" id="t-rand"></div>
+    <figcaption>For SGBT the selected set beats random sets at CCC 0.50–0.85 (p = 0.005, the smallest possible
+    with 200 draws) but not from 0.90 up. Elastic Net beats random sets only at 0.97 and 0.98 (p = 0.03 and
+    0.05), a borderline result among about 90 tests.</figcaption>
+  </figure>
+  <div class="callout"><p><b>Where the SGBT gain comes from.</b> The 0.50 cut removes only 17 features: 16
+  delta-MFCC means (acoustic measures that mostly track recording conditions) and one interaction feature.
+  That alone gives more than half of the gain (+0.019 of +0.033). The benefit comes from
+  <em>removing a few badly shifted features</em>, not from <em>keeping only highly similar ones</em>.</p></div>
+  <p>Compared directly with using all features, no threshold is significantly better. The closest are Elastic Net at
+  CCC ≥ 0.98 (ΔAUC +0.065, 95% CI −0.003 to +0.135, p = 0.059) and SGBT at ≥ 0.70 (+0.033, −0.004 to +0.071, p = 0.08).
+  The two models peak at different thresholds, which is what noise around a flat curve looks like. Strict thresholds (≥ 0.99) hurt both source
+  accuracy and transfer: <b>distribution similarity is not the same as diagnostic information</b>.</p>
+</section>
+
+<!-- 6 ───────────────────────────────────────────── -->
+<section id="weights">
+  <h2><span class="num">6</span>What do the models rely on?</h2>
+  <p class="lead">To see why, we compared the weight each model gives to each feature, for a model trained on
+  90+ and one trained on I-CONECT.</p>
+
+  <div class="callout warn"><p><b>Start with this caveat.</b> The model trained on I-CONECT has no real signal
+  to weight: its accuracy on held-out I-CONECT participants is 0.48–0.52. Its weights are mostly noise, so a
+  difference between the two models mainly means that I-CONECT’s model has not recovered the 90+ pattern, not
+  that I-CONECT has its own distinct markers. Even a 156-person sample of 90+ reaches 0.60, so small sample
+  size alone does not explain it.</p></div>
+
+  <figure class="card">
+    <h4>Elastic Net weights: 90+ model vs. I-CONECT model</h4>
+    <p class="sub">Each model’s top 10 features, ordered by the 90+ weight. Hover for details.</p>
+    <div class="legend">
+      <span class="k"><i class="box" style="background:var(--s2)"></i>Higher in MCI</span>
+      <span class="k"><i class="box" style="background:var(--s1)"></i>Lower in MCI</span>
+      <span class="k"><i class="box" style="background:var(--s1);opacity:.3"></i>Faded: chosen in fewer than half of 50 resamples</span></div>
+    <div class="chart scroll" id="c-en"></div><div class="tbl" id="t-en"></div>
+    <figcaption>Coefficients are per standard deviation, averaged over 50 bootstrap fits. The 90+ model keeps
+    146 features in at least half of its resamples, the I-CONECT model only 13.</figcaption>
+  </figure>
+
+  <ul>
+    <li><b>Two timing features agree in both cohorts:</b> more interviewer turns and a longer median response
+      delay point towards MCI in both.</li>
+    <li><b>Several MFCC acoustic features flip sign.</b> <span class="small">For example
+      <code>mfcc_8_mean_std</code> is negative on 90+ and the largest positive weight on I-CONECT.</span></li>
+    <li><b>The 90+ model’s strongest feature cannot be used on I-CONECT.</b> <code>ix_interruption_rate</code>
+      (how often speakers overlap) is exactly 0 for every I-CONECT participant, most likely because the turn
+      timestamps never overlap, so it cannot carry any signal there.</li>
+  </ul>
+
+  <details class="tech"><summary>SGBT weights (permutation importance)</summary>
+    <p class="sub">Drop in AUC when a feature is shuffled on held-out participants; mean ± SD over 50 resamples.</p>
+    <div class="chart scroll" id="c-sg"></div><div class="tbl" id="t-sg"></div>
+    <p class="small">On I-CONECT every importance has a spread larger than its mean, so the ranking is not reliable.</p></details>
+</section>
+
+<!-- 7 ───────────────────────────────────────────── -->
+<section id="meaning">
+  <h2><span class="num">7</span>What this means</h2>
+  <ul>
+    <li><b>Selecting features by distribution similarity did not reliably help.</b> No threshold was significantly
+      better than keeping every feature, and the strictest filters hurt. Having a similar distribution is not the
+      same as carrying diagnostic information.</li>
+    <li><b>Dropping the clearly shifted features is a reasonable, modest step.</b> Removing the 17 features with
+      CCC &lt; 0.5 helped the boosted-tree model a little (about +0.02) but not Elastic Net, and the gain is not
+      proven against using everything. One of the 17, the interruption rate, is constant in I-CONECT and cannot be
+      used there in any case.</li>
+    <li><b>Only turn-taking timing is shared by both models.</b> Two timing features (interviewer turns and
+      response delay) get the same sign from both. Several MFCC acoustic features get opposite signs, but the
+      I-CONECT model is at chance, so this is a pointer for follow-up, not a result.</li>
+    <li><b>A larger cohort helps a smaller one, even imperfectly.</b> A 156-person study alone could not learn the
+      signal, while the 90+ model reaches about 0.6 on it (better than chance for the boosted-tree model,
+      p = 0.02).</li>
+  </ul>
+</section>
+
+<!-- 8 ───────────────────────────────────────────── -->
+<section id="next">
+  <h2><span class="num">8</span>Limits and next steps</h2>
+  <h3>Limits</h3>
+  <ul>
+    <li>One I-CONECT sample of 156. Every transfer interval is about ±0.09 wide, and the random-subset control varies the features, not the people.</li>
+    <li>Many comparisons (12 thresholds × 2 models × several tests); thresholds were not pre-registered and p-values are not corrected.</li>
+    <li>Similarity scores were computed on the same two cohorts used for evaluation (labels were not used).</li>
+    <li>Training sizes differ (868 vs. 156), which confounds comparisons between directions.</li>
+    <li>Individual feature weights are noisy (changes of about ±0.01–0.02 AUC with no interval). Read family-level patterns, not single ranks.</li>
+  </ul>
+  <h3>Next steps</h3>
+  <ul>
+    <li>Transfer using timing and linguistic features only: a rule that needs no target labels.</li>
+    <li>Test the “drop CCC &lt; 0.5” cleaning rule on another cohort pair, or after matching the speech recognition.</li>
+    <li>Combine with harmonization or domain adaptation instead of selecting features alone.</li>
+    <li>Add confidence intervals to per-feature transfer effects.</li>
+  </ul>
+</section>
+
+<!-- appendix ───────────────────────────────────────────── -->
+<section id="appendix">
+  <h2>Glossary</h2>
+  <dl class="gloss">
+    <dt>MCI</dt><dd>Mild cognitive impairment: cognitive decline beyond normal ageing that does not yet meet the threshold for dementia.</dd>
+    <dt>AUC</dt><dd>Area under the ROC curve. The chance that the model scores a random MCI participant higher than a random normal one. 0.5 = chance, 1.0 = perfect.</dd>
+    <dt>Transfer</dt><dd>Training a model on one cohort and applying it, unchanged, to another.</dd>
+    <dt>Within-cohort cross-validation</dt><dd>Training and testing inside one cohort on different participants. It tells us how much signal is learnable there.</dd>
+    <dt>Cohen’s d</dt><dd>Difference between two averages divided by their spread. 0.2 small, 0.5 medium, 0.8 large.</dd>
+    <dt>Robust z-score</dt><dd>A feature minus its median, divided by its interquartile range, computed separately for each cohort. It removes differences in level and scale.</dd>
+    <dt>Q-Q CCC</dt><dd>A 0–1 score for how closely two distributions match after rescaling (1 = identical shape).</dd>
+    <dt>SGBT / Elastic Net</dt><dd>A gradient-boosted tree model, and a logistic regression that shrinks unhelpful weights towards zero.</dd>
+    <dt>Permutation importance</dt><dd>How much accuracy drops when one feature’s values are shuffled. A bigger drop means the model relies on it more.</dd>
+    <dt>MFCC</dt><dd>Mel-frequency cepstral coefficients: compact summaries of the sound spectrum, sensitive to microphone and recording conditions.</dd>
+    <dt>Bootstrap resample</dt><dd>Re-drawing participants with replacement to estimate how much a result would vary.</dd>
+  </dl>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  Generated __DATE__ from aggregate result files; charts and tables are built from the same data. No
+  participant-level data is included. Code and full methods are in the project repository.
+</div></footer>
+
+<div id="tip" role="tooltip"></div>
+
+<script>
+"use strict";
+const D = /*__DATA__*/null;
+
+/* ── helpers ─────────────────────────────────────────────── */
+const NS = "http://www.w3.org/2000/svg";
+function S(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k.startsWith("$")) e.style.setProperty(k.slice(1), v); else e.setAttribute(k, v);
+  }
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const $ = id => document.getElementById(id);
+const f3 = x => x.toFixed(3), f2 = x => x.toFixed(2);
+const sgn = (x, d = 3) => (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toFixed(d);
+const pct = x => Math.round(x * 100) + "%";
+const thrLabel = t => t == null ? "All" : "≥" + (t * 1000 % 10 === 0 && t * 100 % 1 === 0 ? t.toFixed(2) : String(t));
+const FAM = { linguistic: "Linguistic", temporal: "Temporal", semantic: "Semantic", acoustic: "Acoustic" };
+const MODEL = { sgbt: "Boosted trees (SGBT)", elasticnet: "Elastic Net" };
+const pretty = (f, n = 44) => {
+  const s = f.replace(/^egemaps_/, "eGeMAPS ").replace(/_sma3nz|_sma3/g, "").replace(/F0semitoneFrom27\.5Hz/, "F0").replace(/_/g, " ");
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+};
+const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, var(--surface))`;
+function mk(host, w, h, label) {
+  host.textContent = "";
+  return S("svg", { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: "img", "aria-label": label }, host);
+}
+function yScale(d0, d1, r0, r1) { return v => r0 + (v - d0) / (d1 - d0) * (r1 - r0); }
+
+/* rounded data-end horizontal bar growing from x0 (baseline) to x1 */
+function barPath(x0, x1, y, h, r) {
+  const dir = x1 >= x0 ? 1 : -1, len = Math.abs(x1 - x0), rr = Math.min(r, len, h / 2);
+  if (len < 0.5) return "";
+  const e = x0 + dir * len;
+  return `M${x0},${y} H${e - dir * rr} a${rr},${rr} 0 0 ${dir > 0 ? 1 : 0} ${dir * rr},${rr} ` +
+         `v${h - 2 * rr} a${rr},${rr} 0 0 ${dir > 0 ? 1 : 0} ${-dir * rr},${rr} H${x0} Z`;
+}
+/* rounded data-end vertical column growing from y0 (baseline) to y1 */
+function colPath(x, w, y0, y1, r) {
+  const dir = y1 <= y0 ? -1 : 1, len = Math.abs(y1 - y0), rr = Math.min(r, len, w / 2);
+  if (len < 0.5) return "";
+  const e = y0 + dir * len, sw = dir < 0 ? 1 : 0;
+  return `M${x},${y0} V${e - dir * rr} a${rr},${rr} 0 0 ${sw} ${rr},${dir * rr} h${w - 2 * rr} ` +
+         `a${rr},${rr} 0 0 ${sw} ${rr},${-dir * rr} V${y0} Z`;
+}
+
+/* ── tooltip (textContent only) ─────────────────────────── */
+const tip = $("tip");
+function tipContent(spec) {
+  tip.textContent = "";
+  const t = document.createElement("div"); t.className = "t"; t.textContent = spec.title; tip.appendChild(t);
+  for (const r of spec.rows || []) {
+    const row = document.createElement("div"); row.className = "r";
+    if (r.color) { const k = document.createElement("span"); k.className = "key"; k.style.borderColor = r.color; row.appendChild(k); }
+    const v = document.createElement("span"); v.className = "val"; v.textContent = r.value; row.appendChild(v);
+    const l = document.createElement("span"); l.className = "lab"; l.textContent = r.label; row.appendChild(l);
+    tip.appendChild(row);
+  }
+  if (spec.note) { const n = document.createElement("div"); n.className = "note"; n.textContent = spec.note; tip.appendChild(n); }
+}
+function placeTip(x, y) {
+  const r = tip.getBoundingClientRect(); let tx = x + 14, ty = y + 14;
+  if (tx + r.width > innerWidth - 8) tx = x - r.width - 14;
+  if (ty + r.height > innerHeight - 8) ty = y - r.height - 14;
+  tip.style.left = Math.max(8, tx) + "px"; tip.style.top = Math.max(8, ty) + "px";
+}
+function showTip(spec, x, y) { tipContent(spec); tip.classList.add("on"); placeTip(x, y); }
+function hideTip() { tip.classList.remove("on"); }
+/* attach tooltip to a mark: pointer + keyboard focus */
+function tipOn(node, spec) {
+  node.setAttribute("data-tip", "1"); node.setAttribute("tabindex", "0");
+  node.setAttribute("aria-label", spec.title + ". " + (spec.rows || []).map(r => `${r.label} ${r.value}`).join(", "));
+  node.addEventListener("pointermove", e => showTip(spec, e.clientX, e.clientY));
+  node.addEventListener("pointerleave", hideTip);
+  node.addEventListener("focus", () => { const b = node.getBoundingClientRect(); showTip(spec, b.right, b.top); });
+  node.addEventListener("blur", hideTip);
+}
+
+/* ── table views ────────────────────────────────────────── */
+function table(host, caption, heads, rows) {
+  host.textContent = "";
+  const d = document.createElement("details"); d.className = "table-view";
+  const s = document.createElement("summary"); s.textContent = "View as table"; d.appendChild(s);
+  const wrap = document.createElement("div"); wrap.className = "tablewrap";
+  const t = document.createElement("table");
+  const cap = document.createElement("caption"); cap.className = "small"; cap.style.textAlign = "left"; cap.textContent = caption; t.appendChild(cap);
+  const hr = t.createTHead().insertRow();
+  heads.forEach((h, i) => { const th = document.createElement("th"); th.textContent = h; if (i) th.className = "n"; hr.appendChild(th); });
+  const tb = t.createTBody();
+  rows.forEach(r => { const tr = tb.insertRow(); r.forEach((c, i) => { const td = tr.insertCell(); td.textContent = c; if (i) td.className = "n"; }); });
+  wrap.appendChild(t); d.appendChild(wrap); host.appendChild(d);
+}
+
+/* ── chart 1: effect-size tiers ─────────────────────────── */
+const TIER_NAME = { negligible: "Negligible (< 0.2)", small: "Small (0.2–0.5)", medium: "Medium (0.5–0.8)", large: "Large (≥ 0.8)" };
+const TIER_SHORT = { negligible: ["Negligible", "d < 0.2"], small: ["Small", "0.2–0.5"], medium: ["Medium", "0.5–0.8"], large: ["Large", "d ≥ 0.8"] };
+function drawTiers() {
+  const host = $("c-tiers"), W = host.clientWidth, H = 104, gap = 2;
+  const svg = mk(host, W, H, "Features by size of raw difference between cohorts");
+  const tot = D.dist.tiers.reduce((a, t) => a + t.n, 0), usable = W - gap * 3;
+  const pcts = [18, 40, 68, 100]; let x = 0;
+  D.dist.tiers.forEach((t, i) => {
+    const w = t.n / tot * usable;
+    const r = S("rect", { x, y: 6, width: w, height: 30, rx: 4, $fill: tint("var(--s1)", pcts[i]) }, svg);
+    tipOn(r, { title: TIER_NAME[t.tier], rows: [{ label: "features", value: String(t.n) }, { label: "share", value: pct(t.n / tot) }] });
+    S("text", { x, y: 58, class: "strong" }, svg, String(t.n));
+    S("text", { x, y: 75 }, svg, TIER_SHORT[t.tier][0]);
+    S("text", { x, y: 91, class: "mut" }, svg, TIER_SHORT[t.tier][1]);
+    x += w + gap;
+  });
+  table($("t-tiers"), "Features by |Cohen’s d| between cohorts", ["Tier", "Features", "Share"],
+    D.dist.tiers.map(t => [TIER_NAME[t.tier], t.n, pct(t.n / tot)]));
+}
+
+/* ── chart 2: CCC buckets by family ─────────────────────── */
+function drawCCC() {
+  const host = $("c-ccc"), W = host.clientWidth, rowH = 40, H = rowH * 4 + 8, x0 = 150, x1 = W - 90, gap = 2;
+  const svg = mk(host, W, H, "Features by closeness of distribution match, per family");
+  const fams = ["linguistic", "temporal", "semantic", "acoustic"].map(f => D.dist.families.find(r => r.family === f));
+  fams.forEach((f, i) => {
+    const y = 4 + i * rowH; let x = x0;
+    S("text", { x: 0, y: y + 14, class: "strong" }, svg, FAM[f.family]);
+    S("text", { x: 0, y: y + 29, class: "mut" }, svg, f.n + " features");
+    [["same", "var(--s1)", "Same shape"], ["moderate", tint("var(--s1)", 38), "Moderate"], ["different", "var(--s2)", "Different"]].forEach(([k, col, nm]) => {
+      const w = f[k] / f.n * (x1 - x0 - 2 * gap);
+      if (w <= 0) return;
+      const r = S("rect", { x, y: y + 6, width: w, height: 24, rx: 4, $fill: col }, svg);
+      tipOn(r, { title: `${FAM[f.family]}: ${nm.toLowerCase()}`, rows: [{ label: "features", value: `${f[k]} of ${f.n}` }, { label: "share", value: pct(f[k] / f.n) }],
+        note: `Median CCC ${f.median.toFixed(3)}` });
+      x += w + gap;
+    });
+    S("text", { x: x1 + 8, y: y + 23, class: "strong" }, svg, pct(f.same / f.n) + " same");
+  });
+  table($("t-ccc"), "Features by Q-Q CCC bucket", ["Family", "Features", "Same (≥ 0.95)", "Moderate", "Different (< 0.90)", "Median CCC"],
+    fams.map(f => [FAM[f.family], f.n, f.same, f.moderate, f.different, f.median.toFixed(3)]));
+}
+
+/* ── chart 3: AUC vs threshold, one panel per model ─────── */
+const SER = [
+  { key: "tr", name: "90+ → I-CONECT (transfer)", c: "var(--s2)", shape: "circle" },
+  { key: "cv90", name: "90+ within-cohort", c: "var(--s1)", shape: "square" },
+  { key: "cvic", name: "I-CONECT within-cohort", c: "var(--s3)", shape: "diamond" },
+];
+function marker(svg, shape, cx, cy, color, r) {
+  const o = { $fill: color, $stroke: "var(--surface)", "stroke-width": 2 };
+  if (shape === "square") return S("rect", { x: cx - r, y: cy - r, width: 2 * r, height: 2 * r, rx: 1.5, ...o }, svg);
+  if (shape === "diamond") return S("path", { d: `M${cx},${cy - r - 1} L${cx + r + 1},${cy} L${cx},${cy + r + 1} L${cx - r - 1},${cy} Z`, ...o }, svg);
+  return S("circle", { cx, cy, r, ...o }, svg);
+}
+function drawAUC(model) {
+  const host = $("c-auc-" + model), W = host.clientWidth, H = 290, m = { l: 78, r: 12, t: 26, b: 44 };
+  const rows = D.transfer[model], n = rows.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const svg = mk(host, W, H, `${MODEL[model]}: AUC against similarity threshold`);
+  const y = yScale(0.75, 0.40, m.t, m.t + ih), x = i => m.l + (i + 0.5) * iw / n;
+  S("text", { x: 0, y: 12, class: "strong" }, svg, MODEL[model]);
+  for (let v = 0.40; v <= 0.7501; v += 0.05) {
+    S("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: "grid" }, svg);
+    S("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, svg, Math.abs(v - 0.5) < 1e-6 ? "chance 0.50" : v.toFixed(2));
+  }
+  S("line", { x1: m.l, x2: W - m.r, y1: y(0.5), y2: y(0.5), class: "axis" }, svg);
+  const skip = W < 620 ? 2 : 1;
+  rows.forEach((r, i) => {
+    if (i % skip) return;
+    S("text", { x: x(i), y: H - 24, "text-anchor": "middle" }, svg, thrLabel(r.thr));
+    S("text", { x: x(i), y: H - 9, "text-anchor": "middle", class: "mut" }, svg, "n=" + r.n);
+  });
+  const band = rows.map((r, i) => `${x(i)},${y(r.hi)}`).concat(rows.map((r, i) => `${x(n - 1 - i)},${y(rows[n - 1 - i].lo)}`)).join(" ");
+  S("polygon", { points: band, $fill: "var(--s2)", $opacity: 0.12 }, svg);
+  SER.forEach(s => {
+    S("polyline", { points: rows.map((r, i) => `${x(i)},${y(r[s.key])}`).join(" "), fill: "none", $stroke: s.c, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  });
+  const cross = S("line", { y1: m.t, y2: m.t + ih, class: "axis", $opacity: 0 }, svg);
+  SER.forEach(s => rows.forEach((r, i) => marker(svg, s.shape, x(i), y(r[s.key]), s.c, 4)));
+  rows.forEach((r, i) => {
+    const hit = S("rect", { x: x(i) - iw / n / 2, y: m.t, width: iw / n, height: ih, class: "hit" }, svg);
+    const spec = { title: r.thr == null ? `All features (n = ${r.n})` : `CCC ${thrLabel(r.thr)} (n = ${r.n} features)`,
+      rows: [{ color: "var(--s2)", label: "transfer", value: `${f3(r.tr)} [${f2(r.lo)}, ${f2(r.hi)}]` },
+             { color: "var(--s1)", label: "90+ within-cohort", value: f3(r.cv90) },
+             { color: "var(--s3)", label: "I-CONECT within-cohort", value: f3(r.cvic) }] };
+    tipOn(hit, spec);
+    const on = () => { cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.style.opacity = 1; };
+    const off = () => { cross.style.opacity = 0; };
+    hit.addEventListener("pointerenter", on); hit.addEventListener("pointerleave", off);
+    hit.addEventListener("focus", on); hit.addEventListener("blur", off);
+  });
+}
+function tableAUC() {
+  const rows = [];
+  ["sgbt", "elasticnet"].forEach(m => D.transfer[m].forEach(r => rows.push([MODEL[m], r.thr == null ? "All" : thrLabel(r.thr), r.n,
+    `${f3(r.tr)} [${f2(r.lo)}, ${f2(r.hi)}]`, f3(r.cv90), f3(r.cvic), f3(r.rev)])));
+  table($("t-auc"), "AUC by model and similarity threshold", ["Model", "Threshold", "Features", "90+ → I-CONECT [95% CI]", "90+ within", "I-CONECT within", "I-CONECT → 90+"], rows);
+}
+
+/* ── chart 4: random-subset control ─────────────────────── */
+function drawRand(model) {
+  const host = $("c-rand-" + model), W = host.clientWidth, H = 250, m = { l: 44, r: 12, t: 26, b: 44 };
+  const rows = D.stats.random.filter(r => r.model === model).sort((a, b) => a.thr - b.thr);
+  const n = rows.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const svg = mk(host, W, H, `${MODEL[model]}: selected vs random feature sets`);
+  // same y range in both panels, floored to 0.05 so the lowest random range stays inside the plot
+  const all = D.stats.random;
+  const lo0 = Math.floor((Math.min(...all.map(r => Math.min(r.lo, r.auc))) - 0.005) / 0.05 + 1e-9) * 0.05;
+  const y = yScale(0.70, lo0, m.t, m.t + ih), x = i => m.l + (i + 0.5) * iw / n;
+  S("text", { x: 0, y: 12, class: "strong" }, svg, MODEL[model]);
+  for (let v = lo0; v <= 0.7001; v += 0.05) {
+    S("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: "grid" }, svg);
+    S("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, svg, v.toFixed(2));
+  }
+  const skip = W < 620 ? 2 : 1;
+  rows.forEach((r, i) => {
+    if (!(i % skip)) {
+      S("text", { x: x(i), y: H - 24, "text-anchor": "middle" }, svg, thrLabel(r.thr));
+      S("text", { x: x(i), y: H - 9, "text-anchor": "middle", class: "mut" }, svg, "n=" + r.n);
+    }
+    S("line", { x1: x(i), x2: x(i), y1: y(r.hi), y2: y(r.lo), $stroke: "var(--muted)", "stroke-width": 8, "stroke-linecap": "round", $opacity: 0.35 }, svg);
+    S("line", { x1: x(i) - 9, x2: x(i) + 9, y1: y(r.mean), y2: y(r.mean), $stroke: "var(--ink2)", "stroke-width": 2 }, svg);
+    marker(svg, "circle", x(i), y(r.auc), "var(--s2)", 5);
+    const hit = S("rect", { x: x(i) - iw / n / 2, y: m.t, width: iw / n, height: ih, class: "hit" }, svg);
+    tipOn(hit, { title: `CCC ${thrLabel(r.thr)} (n = ${r.n} features)`,
+      rows: [{ color: "var(--s2)", label: "selected set", value: f3(r.auc) },
+             { color: "var(--ink2)", label: "random mean", value: `${f3(r.mean)} [${f3(r.lo)}, ${f3(r.hi)}]` },
+             { label: "one-sided p", value: r.p.toFixed(3) }] });
+  });
+}
+function tableRand() {
+  const rows = D.stats.random.slice().sort((a, b) => a.model.localeCompare(b.model) || a.thr - b.thr)
+    .map(r => [MODEL[r.model], thrLabel(r.thr), r.n, f3(r.auc), `${f3(r.mean)} [${f3(r.lo)}, ${f3(r.hi)}]`, r.p.toFixed(3)]);
+  table($("t-rand"), "Selected set vs 200 random sets of the same size", ["Model", "Threshold", "Features", "Selected AUC", "Random mean [95%]", "p"], rows);
+}
+
+/* ── chart 5: paired weight bars (Elastic Net) ──────────── */
+function drawEN() {
+  const host = $("c-en"), W = Math.max(host.clientWidth, 680), rows = D.weights.en, rowH = 26;
+  const lab = 300, gap = 28, pw = (W - lab - gap) / 2, top = 38, H = top + rows.length * rowH + 40;
+  const svg = mk(host, W, H, "Elastic Net weights of the 90+ and I-CONECT models");
+  const dom = [-0.5, 0.3], px = (v, o) => o + (v - dom[0]) / (dom[1] - dom[0]) * pw;
+  [["Trained on 90+ (868 people)", lab, "b90", "s90"], ["Trained on I-CONECT (156 people)", lab + pw + gap, "bic", "sic"]].forEach(([title, o, bk, sk]) => {
+    S("text", { x: o, y: 14, class: "strong" }, svg, title);
+    for (let v = -0.4; v <= 0.2001; v += 0.2) {
+      S("line", { x1: px(v, o), x2: px(v, o), y1: top - 8, y2: H - 34, class: Math.abs(v) < 1e-9 ? "axis" : "grid" }, svg);
+      S("text", { x: px(v, o), y: H - 18, "text-anchor": "middle" }, svg, v.toFixed(1));
+    }
+    S("text", { x: o + pw / 2, y: H - 2, "text-anchor": "middle", class: "mut" }, svg, "coefficient (per SD)");
+    rows.forEach((r, i) => {
+      const yy = top + i * rowH, v = r[bk], zero = px(0, o);
+      if (r.uic === 0.5 && bk === "bic") { S("text", { x: o + 6, y: yy + 17, class: "mut", "font-style": "italic" }, svg, "n/a: constant in I-CONECT"); return; }
+      const bar = S("path", { d: barPath(zero, px(v, o), yy + 4, 16, 4), $fill: v > 0 ? "var(--s2)" : "var(--s1)", $opacity: r[sk] >= 0.5 ? 1 : 0.3 }, svg);
+      const hit = S("rect", { x: o, y: yy, width: pw, height: rowH, class: "hit" }, svg);
+      tipOn(hit, { title: r.feature, rows: [
+        { label: "90+ model coefficient", value: `${sgn(r.b90)}  (chosen in ${pct(r.s90)})` },
+        { label: "I-CONECT model coefficient", value: r.uic === 0.5 ? "n/a (constant)" : `${sgn(r.bic)}  (chosen in ${pct(r.sic)})` },
+        { label: "single-feature AUC, 90+ / I-CONECT", value: `${f2(r.u90)} / ${r.uic === 0.5 ? "n/a" : f2(r.uic)}` }],
+        note: FAM[r.family] + " · AUC above 0.5 means higher in MCI" });
+    });
+  });
+  rows.forEach((r, i) => S("text", { x: lab - 12, y: top + i * rowH + 16, "text-anchor": "end", class: "feat" }, svg, pretty(r.feature, 42)));
+  table($("t-en"), "Elastic Net coefficients (50 bootstrap fits)", ["Feature", "Family", "90+ coef.", "90+ chosen", "I-CONECT coef.", "I-CONECT chosen", "AUC 90+", "AUC I-CONECT"],
+    rows.map(r => [r.feature, FAM[r.family], sgn(r.b90), pct(r.s90), r.uic === 0.5 ? "n/a" : sgn(r.bic), r.uic === 0.5 ? "n/a" : pct(r.sic), f3(r.u90), r.uic === 0.5 ? "n/a" : f3(r.uic)]));
+}
+
+/* ── chart 6: SGBT importance dot-and-whisker ───────────── */
+function drawSG() {
+  const host = $("c-sg"), W = Math.max(host.clientWidth, 680), rows = D.weights.sgbt, rowH = 26;
+  const lab = 300, gap = 28, pw = (W - lab - gap) / 2, top = 38, H = top + rows.length * rowH + 40;
+  const svg = mk(host, W, H, "SGBT permutation importance of the 90+ and I-CONECT models");
+  const dom = [-0.035, 0.045], px = (v, o) => o + (v - dom[0]) / (dom[1] - dom[0]) * pw;
+  [["Trained on 90+", lab, "i90", "sd90"], ["Trained on I-CONECT", lab + pw + gap, "iic", "sdic"]].forEach(([title, o, ik, sk]) => {
+    S("text", { x: o, y: 14, class: "strong" }, svg, title);
+    for (let v = -0.03; v <= 0.0401; v += 0.01) {
+      S("line", { x1: px(v, o), x2: px(v, o), y1: top - 8, y2: H - 34, class: Math.abs(v) < 1e-9 ? "axis" : "grid" }, svg);
+      if (Math.round(v * 100) % 2 === 0) S("text", { x: px(v, o), y: H - 18, "text-anchor": "middle" }, svg, v.toFixed(2));
+    }
+    S("text", { x: o + pw / 2, y: H - 2, "text-anchor": "middle", class: "mut" }, svg, "AUC drop when shuffled");
+    rows.forEach((r, i) => {
+      const yy = top + i * rowH + rowH / 2;
+      S("line", { x1: px(r[ik] - r[sk], o), x2: px(r[ik] + r[sk], o), y1: yy, y2: yy, $stroke: "var(--muted)", "stroke-width": 2 }, svg);
+      marker(svg, "circle", px(r[ik], o), yy, "var(--s4)", 5);
+      const hit = S("rect", { x: o, y: yy - rowH / 2, width: pw, height: rowH, class: "hit" }, svg);
+      tipOn(hit, { title: r.feature, rows: [
+        { label: "90+ model", value: `${sgn(r.i90, 4)} ± ${r.sd90.toFixed(4)}` },
+        { label: "I-CONECT model", value: `${sgn(r.iic, 4)} ± ${r.sdic.toFixed(4)}` }], note: FAM[r.family] });
+    });
+  });
+  rows.forEach((r, i) => S("text", { x: lab - 12, y: top + i * rowH + 17, "text-anchor": "end", class: "feat" }, svg, pretty(r.feature, 42)));
+  table($("t-sg"), "SGBT permutation importance (mean ± SD over 50 fits)", ["Feature", "Family", "90+ model", "I-CONECT model"],
+    rows.map(r => [r.feature, FAM[r.family], `${sgn(r.i90, 4)} ± ${r.sd90.toFixed(4)}`, `${sgn(r.iic, 4)} ± ${r.sdic.toFixed(4)}`]));
+}
+
+/* ── render, toggles, theme, nav ────────────────────────── */
+function renderAll() {
+  hideTip();
+  drawTiers(); drawCCC(); drawAUC("sgbt"); drawAUC("elasticnet"); drawRand("sgbt"); drawRand("elasticnet");
+  drawEN(); drawSG();
+}
+let first = true;
+function boot() {
+  renderAll();
+  tableAUC(); tableRand();
+  first = false;
+}
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderAll, 150); });
+$("themeBtn").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme") ||
+    (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+});
+/* current section in the nav */
+const links = [...document.querySelectorAll("nav.toc a")];
+const secs = [...document.querySelectorAll("main section")];
+function markNav() {
+  let cur = secs[0].id;
+  secs.forEach(sec => { if (sec.getBoundingClientRect().top < 120) cur = sec.id; });
+  links.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + cur));
+}
+addEventListener("scroll", markNav, { passive: true }); markNav();
+boot();
+</script>
+</body>
+</html>
